@@ -2,9 +2,13 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
+body {
+	@apply bg-zinc-900;
+}
+
 .board {
-	@apply rounded-xl;
-	width: 400px;
+	width: 800px;
+	@apply m-5;
 }
 
 .board-bg {
@@ -13,18 +17,50 @@
 	grid-template-rows: repeat(var(--height), 1fr);
 }
 
+.left-top-corner {
+	border-top-left-radius: 15%;
+}
+
+.left-bottom-corner {
+	border-bottom-left-radius: 15%;
+}
+
+.right-top-corner {
+	border-top-right-radius: 15%;
+}
+
+.right-bottom-corner {
+	border-bottom-right-radius: 15%;
+}
+
 .square {
-	aspect-ratio: 1 / 1;
-	display: flex;
-	justify-content: left;
-	align-items: end;
-	font-size: 1.2em;
+	@apply relative aspect-square;
+	container-type: size;
 }
 
-.white {
+.square.white {
 	background-color: #f0d9b5;
+	color: #b58863;
 }
 
-.black {
+.square.black {
 	background-color: #b58863;
+	color: #f0d9b5;
+}
+
+.coordinates {
+	@apply absolute font-extrabold;
+
+	font-size: 15cqmin;
+}
+
+.coordinates.columns {
+	left: 4cqmin;
+	bottom: 4cqmin;
+}
+
+.coordinates.rows,
+.coordinates.all {
+	right: 4cqmin;
+	top: 4cqmin;
 }
