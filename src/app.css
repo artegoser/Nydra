@@ -1,0 +1,30 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+.board {
+	@apply rounded-xl;
+	width: 400px;
+}
+
+.board-bg {
+	display: grid;
+	grid-template-columns: repeat(var(--width), 1fr);
+	grid-template-rows: repeat(var(--height), 1fr);
+}
+
+.square {
+	aspect-ratio: 1 / 1;
+	display: flex;
+	justify-content: left;
+	align-items: end;
+	font-size: 1.2em;
+}
+
+.white {
+	background-color: #f0d9b5;
+}
+
+.black {
+	background-color: #b58863;
+}
