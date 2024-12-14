@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { numToAlpha } from '$lib/utils';
 
-	export let width = 50;
-	export let height = 50;
+	export let width: number;
+	export let height: number;
 	export let showCoordinates = true;
 	export let allCoordinates = false;
 </script>
 
-<div class="board-bg" style="--width: {width}; --height: {height};">
+<div class="board-layer bg" style="--width: {width}; --height: {height};">
 	{#each { length: height } as _, row}
 		{#each { length: width } as _, col}
 			<div

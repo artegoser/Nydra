@@ -7,14 +7,25 @@ body {
 }
 
 .board {
-	width: 800px;
+	position: relative;
 	@apply m-5;
 }
 
-.board-bg {
+.board-layer {
+	position: absolute;
+	width: 400px;
+
 	display: grid;
 	grid-template-columns: repeat(var(--width), 1fr);
 	grid-template-rows: repeat(var(--height), 1fr);
+}
+
+.board-layer.bg {
+	z-index: 0;
+}
+
+.board-layer.pieces {
+	z-index: 1;
 }
 
 .left-top-corner {
@@ -36,6 +47,10 @@ body {
 .square {
 	@apply relative aspect-square;
 	container-type: size;
+}
+
+.square .piece {
+	width: 100%;
 }
 
 .square.white {
