@@ -1,9 +1,9 @@
-export abstract class Piece {
-	abstract coordX: number;
-	abstract coordY: number;
-	abstract playable: boolean;
-
-	abstract svg: string;
-
+export class Piece {
 	moved: boolean = false;
+
+	svg: string;
+
+	constructor(name: string, color: string = 'W') {
+		this.svg = `/pieces/${color}/${name}.svg`;
+	}
 }

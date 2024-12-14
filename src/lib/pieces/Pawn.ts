@@ -1,7 +1,7 @@
 import { Piece } from './main';
 
-export class King extends Piece {
+export class Pawn extends Piece {
 	constructor(color: string) {
-		super('King', color);
+		super('Pawn', color);
 	}
 }
