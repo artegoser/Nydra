@@ -47,6 +47,7 @@
 	let fadingActive = false;
 	let seenAnimationSeq = -1;
 	let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+	let animationToken = 0;
 
 	function key(position: PositionView) {
 		return `${position.x}:${position.y}`;
@@ -63,42 +64,66 @@
 		return `/pieces/${directory}/${filename}.svg`;
 	}
 
-	function assetPath(entity: EntityView) {
-		return assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key);
+	function display(
+		position: PositionView,
+		orientationValue: 'white' | 'black',
+		width: number,
+		height: number
+	) {
+		return orientationValue === 'white'
+			? { x: position.x, y: height - position.y - 1 }
+			: { x: width - position.x - 1, y: position.y };
 	}
 
-	function display(position: PositionView) {
-		return orientation === 'white'
-			? { x: position.x, y: game.height - position.y - 1 }
-			: { x: game.width - position.x - 1, y: position.y };
-	}
-
-	function entityStyle(entity: EntityView) {
-		const shown = display(entity.position);
-		const offset = motionOffsets[entity.id] ?? { x: 0, y: 0 };
-		if (drag?.started && drag.entityId === entity.id && boardElement) {
-			const bounds = boardElement.getBoundingClientRect();
-			const square = bounds.width / game.width;
-			return `left:${drag.x - square / 2}px;top:${drag.y - square / 2}px;width:${square}px;height:${square}px;transform:none;transition:none;`;
+	function entityStyle(
+		entity: EntityView,
+		offset: { x: number; y: number } | undefined,
+		currentDrag: DragState | null,
+		orientationValue: 'white' | 'black',
+		width: number,
+		height: number,
+		board: HTMLDivElement | undefined
+	) {
+		const shown = display(entity.position, orientationValue, width, height);
+		const motion = offset ?? { x: 0, y: 0 };
+		if (currentDrag?.started && currentDrag.entityId === entity.id && board) {
+			const bounds = board.getBoundingClientRect();
+			const square = bounds.width / width;
+			return `left:${currentDrag.x - square / 2}px;top:${currentDrag.y - square / 2}px;width:${square}px;height:${square}px;transform:none;transition:none;`;
 		}
-		return `left:${(shown.x * 100) / game.width}%;top:${(shown.y * 100) / game.height}%;width:${100 / game.width}%;height:${100 / game.height}%;transform:translate3d(${offset.x * 100}%,${offset.y * 100}%,0);`;
+		return `left:${(shown.x * 100) / width}%;top:${(shown.y * 100) / height}%;width:${100 / width}%;height:${100 / height}%;transform:translate3d(${motion.x * 100}%,${motion.y * 100}%,0);`;
 	}
 
-	function fadingStyle(entity: EntityView) {
-		const shown = display(entity.position);
-		return `left:${(shown.x * 100) / game.width}%;top:${(shown.y * 100) / game.height}%;width:${100 / game.width}%;height:${100 / game.height}%;`;
+	function fadingStyle(
+		entity: EntityView,
+		orientationValue: 'white' | 'black',
+		width: number,
+		height: number
+	) {
+		const shown = display(entity.position, orientationValue, width, height);
+		return `left:${(shown.x * 100) / width}%;top:${(shown.y * 100) / height}%;width:${100 / width}%;height:${100 / height}%;`;
 	}
 
-	function squareStyle(position: PositionView) {
-		const shown = display(position);
-		return `left:${(shown.x * 100) / game.width}%;top:${(shown.y * 100) / game.height}%;width:${100 / game.width}%;height:${100 / game.height}%;`;
+	function squareStyle(
+		position: PositionView,
+		orientationValue: 'white' | 'black',
+		width: number,
+		height: number
+	) {
+		const shown = display(position, orientationValue, width, height);
+		return `left:${(shown.x * 100) / width}%;top:${(shown.y * 100) / height}%;width:${100 / width}%;height:${100 / height}%;`;
 	}
 
-	function center(position: PositionView) {
-		const shown = display(position);
+	function center(
+		position: PositionView,
+		orientationValue: 'white' | 'black',
+		width: number,
+		height: number
+	) {
+		const shown = display(position, orientationValue, width, height);
 		return {
-			x: ((shown.x + 0.5) * 100) / game.width,
-			y: ((shown.y + 0.5) * 100) / game.height
+			x: ((shown.x + 0.5) * 100) / width,
+			y: ((shown.y + 0.5) * 100) / height
 		};
 	}
 
@@ -267,6 +292,17 @@
 	function startTransitionAnimation() {
 		if (seenAnimationSeq === animationSeq) return;
 		seenAnimationSeq = animationSeq;
+
+		const token = ++animationToken;
+		if (cleanupTimer) {
+			clearTimeout(cleanupTimer);
+			cleanupTimer = null;
+		}
+		motionOffsets = {};
+		assetOverrides = {};
+		fadingPieces = [];
+		fadingActive = false;
+
 		if (!transition || !previousGame || typeof window === 'undefined') return;
 		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 		const previousById = new Map(previousGame.entities.map((entity) => [entity.id, entity]));
@@ -280,8 +316,8 @@
 				const entity = Number(change.entity);
 				const from = change.from as PositionView;
 				const to = change.to as PositionView;
-				const fromDisplay = display(from);
-				const toDisplay = display(to);
+				const fromDisplay = display(from, orientation, game.width, game.height);
+				const toDisplay = display(to, orientation, game.width, game.height);
 				offsets[entity] = {
 					x: fromDisplay.x - toDisplay.x,
 					y: fromDisplay.y - toDisplay.y
@@ -303,14 +339,17 @@
 		assetOverrides = overrides;
 		fadingPieces = removed;
 		fadingActive = false;
-		if (cleanupTimer) clearTimeout(cleanupTimer);
 		requestAnimationFrame(() =>
 			requestAnimationFrame(() => {
-				motionOffsets = Object.fromEntries(Object.keys(offsets).map((id) => [Number(id), { x: 0, y: 0 }]));
+				if (token !== animationToken) return;
+				motionOffsets = Object.fromEntries(
+					Object.keys(offsets).map((id) => [Number(id), { x: 0, y: 0 }])
+				);
 				fadingActive = true;
 			})
 		);
 		cleanupTimer = setTimeout(() => {
+			if (token !== animationToken) return;
 			motionOffsets = {};
 			assetOverrides = {};
 			fadingPieces = [];
@@ -328,7 +367,6 @@
 	on:pointermove={handlePointerMove}
 	on:pointerup={handlePointerUp}
 	on:pointercancel={handlePointerUp}
-	on:contextmenu|preventDefault
 >
 	<div class="square-state-layer" aria-hidden="true">
 		{#each { length: game.height } as _, y}
@@ -344,7 +382,7 @@
 					class:move-dest={destination != null && !occupied}
 					class:capture-dest={destination != null && occupied}
 					class:destination-hover={destination != null && samePosition(hover, position)}
-					style={squareStyle(position)}
+					style={squareStyle(position, orientation, game.width, game.height)}
 				></div>
 			{/each}
 		{/each}
@@ -354,7 +392,7 @@
 		{#each squareAnnotations as annotation}
 			<div
 				class="annotation-square"
-				style={`${squareStyle(annotation.position)}background:${annotation.color};`}
+				style={`${squareStyle(annotation.position, orientation, game.width, game.height)}background:${annotation.color};`}
 			></div>
 		{/each}
 		<svg viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -365,14 +403,14 @@
 				<marker id="arrow-yellow" markerWidth="4" markerHeight="4" refX="3.1" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#e68f00" /></marker>
 			</defs>
 			{#each arrows as arrow}
-				{@const from = center(arrow.from)}
-				{@const to = center(arrow.to)}
+				{@const from = center(arrow.from, orientation, game.width, game.height)}
+				{@const to = center(arrow.to, orientation, game.width, game.height)}
 				{@const marker = arrow.color === '#882020' ? 'red' : arrow.color === '#003088' ? 'blue' : arrow.color === '#e68f00' ? 'yellow' : 'green'}
 				<line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={arrow.color} stroke-width="1.8" stroke-linecap="round" marker-end={`url(#arrow-${marker})`} />
 			{/each}
 			{#if drawStart && drawCurrent && !samePosition(drawStart, drawCurrent)}
-				{@const from = center(drawStart)}
-				{@const to = center(drawCurrent)}
+				{@const from = center(drawStart, orientation, game.width, game.height)}
+				{@const to = center(drawCurrent, orientation, game.width, game.height)}
 				<line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={drawColor} stroke-width="1.8" stroke-linecap="round" opacity="0.75" />
 			{/if}
 		</svg>
@@ -383,7 +421,7 @@
 			<img
 				class="piece-node fading-piece"
 				class:fading-active={fadingActive}
-				style={fadingStyle(entity)}
+				style={fadingStyle(entity, orientation, game.width, game.height)}
 				src={assetPathFromKey(entity.asset_key)}
 				alt=""
 				draggable="false"
@@ -391,20 +429,20 @@
 		{/each}
 		{#each game.entities as entity (entity.id)}
 			{#if drag?.started && drag.entityId === entity.id}
-				<img class="piece-node origin-ghost" style={fadingStyle(entity)} src={assetPath(entity)} alt="" draggable="false" />
+				<img class="piece-node origin-ghost" style={fadingStyle(entity, orientation, game.width, game.height)} src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)} alt="" draggable="false" />
 			{/if}
 			<img
 				class="piece-node"
 				class:dragging={drag?.started && drag.entityId === entity.id}
-				style={entityStyle(entity)}
-				src={assetPath(entity)}
+				style={entityStyle(entity, motionOffsets[entity.id], drag, orientation, game.width, game.height, boardElement)}
+				src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)}
 				alt=""
 				draggable="false"
 			/>
 		{/each}
 	</div>
 
-	<div class="hit-layer" role="grid" aria-label="Chess board">
+	<div class="hit-layer" role="grid" aria-label="Chess board" on:contextmenu|preventDefault>
 		{#each { length: game.height } as _, row}
 			{#each { length: game.width } as _, col}
 				{@const x = orientation === 'white' ? col : game.width - col - 1}
@@ -425,7 +463,7 @@
 	</div>
 
 	{#if optionChoices.length > 0 && interaction.pending_target}
-		{@const shown = display(interaction.pending_target)}
+		{@const shown = display(interaction.pending_target, orientation, game.width, game.height)}
 		<div
 			class="promotion-menu"
 			class:from-top={shown.y === 0}

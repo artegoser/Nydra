@@ -81,6 +81,7 @@
 		runtime = next;
 		previousGame = null;
 		latestTransition = null;
+		animationSeq += 1;
 		game = next.view();
 		interaction = next.interaction();
 		history = next.history();

@@ -359,6 +359,9 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [x] Animate en passant as capturing-pawn movement plus independent victim removal.
 - [x] Animate promotion movement and resulting type/presentation change without teleporting.
 - [x] Keep animation implementation generic and driven by `StateDelta`, not chess-specific frontend rules.
+- [x] Keep authoritative `GameView` positions independent from temporary animation offsets.
+- [x] Make animation offsets explicit Svelte dependencies so cleanup/undo/redo cannot leave stale piece transforms.
+- [x] Cancel stale animation frames when a newer transition supersedes them.
 - [x] Respect reduced-motion preferences.
 
 ### Promotion
@@ -433,6 +436,7 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [x] Add known castling-heavy perft position(s).
 - [x] Add known en-passant/check interaction perft position(s).
 - [x] Add known promotion perft position(s).
+- [x] Keep expensive depth-4/reference perft cases as an explicit release-mode slow correctness gate instead of running them in every development test cycle.
 
 ### Regressions
 

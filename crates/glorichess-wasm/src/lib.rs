@@ -130,7 +130,7 @@ impl GameHandle {
     fn interaction_view(&self) -> InteractionView {
         self.interaction
             .as_ref()
-            .map(|driver| InteractionView::from_driver(driver))
+            .map(InteractionView::from_driver)
             .unwrap_or_default()
     }
 
