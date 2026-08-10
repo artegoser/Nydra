@@ -10,23 +10,23 @@ const SELECTED_ENTITY: &str = "chess.selected_entity";
 const PENDING_X: &str = "chess.pending_x";
 const PENDING_Y: &str = "chess.pending_y";
 
-pub struct ChessInteractionRules<'a> {
-    rules: &'a ChessRules,
-    history: Option<&'a History>,
+pub struct ChessInteractionRules {
+    rules: ChessRules,
+    history: Option<History>,
 }
 
-impl<'a> ChessInteractionRules<'a> {
-    pub const fn new(rules: &'a ChessRules) -> Self {
+impl ChessInteractionRules {
+    pub fn new(rules: &ChessRules) -> Self {
         Self {
-            rules,
+            rules: rules.clone(),
             history: None,
         }
     }
 
-    pub const fn with_history(rules: &'a ChessRules, history: &'a History) -> Self {
+    pub fn with_history(rules: &ChessRules, history: &History) -> Self {
         Self {
-            rules,
-            history: Some(history),
+            rules: rules.clone(),
+            history: Some(history.clone()),
         }
     }
 
@@ -80,7 +80,7 @@ impl<'a> ChessInteractionRules<'a> {
         entity: EntityId,
     ) -> Result<Vec<PseudoMove>, InteractionError> {
         self.rules
-            .legal_moves_with_history(&turn.working, self.history, entity)
+            .legal_moves_with_history(&turn.working, self.history.as_ref(), entity)
             .map_err(Self::rule_error)
     }
 
@@ -101,13 +101,13 @@ impl<'a> ChessInteractionRules<'a> {
         promotion: Option<glorichess_core::EntityTypeId>,
     ) -> Result<InteractionFlow, InteractionError> {
         self.rules
-            .execute_move(turn, self.history, movement, promotion)
+            .execute_move(turn, self.history.as_ref(), movement, promotion)
             .map_err(Self::rule_error)?;
         Ok(InteractionFlow::FinishTurn)
     }
 }
 
-impl InteractionRules for ChessInteractionRules<'_> {
+impl InteractionRules for ChessInteractionRules {
     fn choices(
         &self,
         turn: &TurnSession,
@@ -115,7 +115,7 @@ impl InteractionRules for ChessInteractionRules<'_> {
     ) -> Result<Vec<ChoiceSpec>, InteractionError> {
         let side = self.side_to_move(turn)?;
         let empty_history = History::default();
-        let history = self.history.unwrap_or(&empty_history);
+        let history = self.history.as_ref().unwrap_or(&empty_history);
         if self.rules.status(&turn.working, history).map_err(Self::rule_error)?.outcome.is_some() {
             return Ok(Vec::new());
         }

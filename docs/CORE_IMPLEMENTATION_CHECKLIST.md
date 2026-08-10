@@ -273,20 +273,20 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 11 — WASM bridge
 
-- [ ] Create browser-facing `GameHandle`.
-- [ ] Expose `new_chess()`.
-- [ ] Expose `from_fen()`.
-- [ ] Expose current `GameView`.
-- [ ] Expose current `InteractionView`.
-- [ ] Expose choice resolution.
-- [ ] Expose transition/change results.
-- [ ] Expose optional presentation cues.
-- [ ] Expose undo.
-- [ ] Expose redo.
-- [ ] Expose FEN serialization.
-- [ ] Expose compact history/move-log view.
-- [ ] Keep Rust internals out of frontend DTO contracts.
-- [ ] Keep calls coarse-grained across the JS/WASM boundary.
+- [x] Create browser-facing `GameHandle`.
+- [x] Expose `new_chess()`.
+- [x] Expose `from_fen()`.
+- [x] Expose current `GameView`.
+- [x] Expose current `InteractionView`.
+- [x] Expose choice resolution.
+- [x] Expose transition/change results.
+- [x] Expose optional presentation cues.
+- [x] Expose undo.
+- [x] Expose redo.
+- [x] Expose FEN serialization.
+- [x] Expose compact history/move-log view.
+- [x] Keep Rust internals out of frontend DTO contracts.
+- [x] Keep calls coarse-grained across the JS/WASM boundary.
 
 ## Phase 12 — Svelte game-model migration
 

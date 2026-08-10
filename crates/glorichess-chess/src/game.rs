@@ -4,10 +4,10 @@ use crate::{
     PAWN, QUEEN, ROOK,
 };
 use glorichess_core::{
-    EntityId, EntityState, EntityTypeId, GameState, History, PlayerId, PlayerState, Position,
-    RecordedAction, StateMap, TeamId, TeamState, TurnSession,
+    EntityId, EntityPresentation, EntityState, EntityTypeId, GameState, History, PlayerId,
+    PlayerState, Position, RecordedAction, RuleContext, StateMap, TeamId, TeamState, TurnSession,
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 pub const WHITE_PLAYER: PlayerId = PlayerId::new(1);
 pub const BLACK_PLAYER: PlayerId = PlayerId::new(2);
@@ -144,8 +144,9 @@ fn add_piece(
     Ok(id)
 }
 
+#[derive(Clone)]
 pub struct ChessRules {
-    pieces: BTreeMap<EntityTypeId, Box<dyn ChessPieceRule>>,
+    pieces: BTreeMap<EntityTypeId, Arc<dyn ChessPieceRule>>,
 }
 
 impl ChessRules {
@@ -170,15 +171,27 @@ impl ChessRules {
         if self.pieces.contains_key(&entity_type) {
             return Err(ChessError::DuplicatePieceRule(entity_type));
         }
-        self.pieces.insert(entity_type, Box::new(rule));
+        self.pieces.insert(entity_type, Arc::new(rule));
         Ok(())
     }
 
     pub fn piece_rule(&self, entity_type: EntityTypeId) -> Result<&dyn ChessPieceRule, ChessError> {
         self.pieces
             .get(&entity_type)
-            .map(Box::as_ref)
+            .map(Arc::as_ref)
             .ok_or(ChessError::PieceRuleNotFound(entity_type))
+    }
+
+    pub fn presentation(
+        &self,
+        state: &GameState,
+        history: Option<&History>,
+        entity: EntityId,
+    ) -> Result<EntityPresentation, ChessError> {
+        let context = RuleContext::from_state(state, history).entity_context(entity)?;
+        Ok(self
+            .piece_rule(context.entity().entity_type)?
+            .presentation(context)?)
     }
 
     pub fn pseudo_moves(

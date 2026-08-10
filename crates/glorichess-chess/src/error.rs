@@ -1,4 +1,4 @@
-use glorichess_core::{CoreError, EntityId, EntityTypeId, PlayerId, Position};
+use glorichess_core::{CoreError, EntityId, EntityTypeId, PlayerId, Position, RuleError};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
@@ -7,6 +7,8 @@ pub enum ChessError {
     InvalidFen(String),
     #[error(transparent)]
     Core(#[from] CoreError),
+    #[error(transparent)]
+    Rule(#[from] RuleError),
     #[error("player {0} is not a standard chess side")]
     UnknownSide(PlayerId),
     #[error("entity type {0} has no registered chess piece rule")]
