@@ -51,6 +51,13 @@ impl ChessSide {
             Self::Black => 6,
         }
     }
+
+    pub const fn opponent(self) -> Self {
+        match self {
+            Self::White => Self::Black,
+            Self::Black => Self::White,
+        }
+    }
 }
 
 pub fn empty_chess_state() -> Result<GameState, ChessError> {
@@ -177,6 +184,101 @@ impl ChessRules {
         let context = ChessPieceContext::new(state, entity)?;
         self.piece_rule(context.entity().entity_type)?
             .attacks(context)
+    }
+
+    pub fn king(&self, state: &GameState, side: ChessSide) -> Result<EntityId, ChessError> {
+        let mut kings = state
+            .entities
+            .values()
+            .filter(|entity| entity.owner == side.player() && entity.entity_type == KING)
+            .map(|entity| entity.id);
+        let king = kings.next().ok_or(ChessError::MissingKing(side.player()))?;
+        if kings.next().is_some() {
+            return Err(ChessError::MultipleKings(side.player()));
+        }
+        Ok(king)
+    }
+
+    pub fn is_square_attacked(
+        &self,
+        state: &GameState,
+        by_side: ChessSide,
+        square: Position,
+    ) -> Result<bool, ChessError> {
+        for entity in state
+            .entities
+            .values()
+            .filter(|entity| entity.owner == by_side.player())
+        {
+            if self.attacks(state, entity.id)?.contains(&square) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn in_check(&self, state: &GameState, side: ChessSide) -> Result<bool, ChessError> {
+        let king = self.king(state, side)?;
+        let king_square = state.entity(king)?.position;
+        self.is_square_attacked(state, side.opponent(), king_square)
+    }
+
+    pub fn legal_moves(
+        &self,
+        state: &GameState,
+        entity: EntityId,
+    ) -> Result<Vec<PseudoMove>, ChessError> {
+        let actor = state.entity(entity)?;
+        let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
+        let mut legal = Vec::new();
+
+        for movement in self.pseudo_moves(state, entity)? {
+            if let Some(captured) = movement.capture {
+                if state.entity(captured)?.entity_type == KING {
+                    continue;
+                }
+            }
+
+            let mut candidate = state.clone();
+            self.apply_basic_move(&mut candidate, &movement)?;
+            if !self.in_check(&candidate, side)? {
+                legal.push(movement);
+            }
+        }
+
+        Ok(legal)
+    }
+
+    pub fn legal_moves_for_side(
+        &self,
+        state: &GameState,
+        side: ChessSide,
+    ) -> Result<Vec<PseudoMove>, ChessError> {
+        let mut legal = Vec::new();
+        for entity in state
+            .entities
+            .values()
+            .filter(|entity| entity.owner == side.player())
+        {
+            legal.extend(self.legal_moves(state, entity.id)?);
+        }
+        Ok(legal)
+    }
+
+    pub(crate) fn apply_basic_move(
+        &self,
+        state: &mut GameState,
+        movement: &PseudoMove,
+    ) -> Result<(), ChessError> {
+        let actor = state.entity(movement.actor)?;
+        if actor.position != movement.from {
+            return Err(ChessError::StaleMove(movement.actor));
+        }
+        if let Some(captured) = movement.capture {
+            state.remove_entity(captured)?;
+        }
+        state.move_entity(movement.actor, movement.to)?;
+        Ok(())
     }
 }
 

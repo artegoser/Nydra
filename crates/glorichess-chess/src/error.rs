@@ -17,4 +17,10 @@ pub enum ChessError {
     },
     #[error("chess piece rule {0} is already registered")]
     DuplicatePieceRule(EntityTypeId),
+    #[error("chess side/player {0} has no king")]
+    MissingKing(PlayerId),
+    #[error("chess side/player {0} has multiple kings")]
+    MultipleKings(PlayerId),
+    #[error("move for entity {0} was generated for a stale position")]
+    StaleMove(EntityId),
 }

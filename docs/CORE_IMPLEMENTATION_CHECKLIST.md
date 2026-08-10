@@ -172,17 +172,17 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 7 — Attack maps and legal chess actions
 
-- [ ] Locate each side's king robustly.
-- [ ] Query whether a square is attacked by a given side/player.
-- [ ] Detect current check.
-- [ ] Apply candidate action to a speculative state.
-- [ ] Reject actions leaving own king attacked.
-- [ ] Handle pinned pieces correctly.
-- [ ] Handle discovered checks correctly.
-- [ ] Handle double check correctly.
-- [ ] Validate king moves into/out of attacked squares.
-- [ ] Validate king captures using resulting-state attacks.
-- [ ] Expose only legal chess destinations/options to frontend interactions.
+- [x] Locate each side's king robustly.
+- [x] Query whether a square is attacked by a given side/player.
+- [x] Detect current check.
+- [x] Apply candidate action to a speculative state.
+- [x] Reject actions leaving own king attacked.
+- [x] Handle pinned pieces correctly.
+- [x] Handle discovered checks correctly.
+- [x] Handle double check correctly.
+- [x] Validate king moves into/out of attacked squares.
+- [x] Validate king captures using resulting-state attacks.
+- [x] Expose only legal chess destinations/options to frontend interactions.
 
 ## Phase 8 — Special chess moves
 

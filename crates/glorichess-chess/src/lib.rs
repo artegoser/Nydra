@@ -3,6 +3,7 @@
 
 mod error;
 mod game;
+mod interaction;
 mod piece;
 mod pieces;
 
@@ -11,6 +12,7 @@ pub use game::{
     empty_chess_state, standard_chess_state, ChessRules, BLACK_PLAYER, BLACK_TEAM, WHITE_PLAYER,
     WHITE_TEAM,
 };
+pub use interaction::ChessInteractionRules;
 pub use piece::{
     ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP, KING, KNIGHT, PAWN,
     QUEEN, ROOK,
@@ -271,6 +273,92 @@ mod tests {
                 .collect::<BTreeSet<_>>(),
             BTreeSet::from([Position::new(3, 5), Position::new(5, 5)])
         );
+    }
+
+    fn legal_test_state() -> glorichess_core::GameState {
+        empty_chess_state().unwrap()
+    }
+
+    #[test]
+    fn attack_maps_detect_check_and_pinned_piece_moves_are_filtered() {
+        let rules = ChessRules::standard();
+        let mut state = legal_test_state();
+        let white_king = add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let pinned_rook = add_piece(&mut state, 2, ROOK, ChessSide::White, Position::new(4, 1));
+        add_piece(&mut state, 3, ROOK, ChessSide::Black, Position::new(4, 7));
+        add_piece(&mut state, 4, KING, ChessSide::Black, Position::new(7, 7));
+
+        assert!(!rules.in_check(&state, ChessSide::White).unwrap());
+        assert!(rules.is_square_attacked(&state, ChessSide::Black, Position::new(4, 1)).unwrap());
+
+        let pseudo = destinations(&rules.pseudo_moves(&state, pinned_rook).unwrap());
+        assert!(pseudo.contains(&Position::new(3, 1)));
+        let legal = destinations(&rules.legal_moves(&state, pinned_rook).unwrap());
+        assert!(!legal.contains(&Position::new(3, 1)));
+        assert!(!legal.contains(&Position::new(5, 1)));
+        assert!(legal.contains(&Position::new(4, 2)));
+        assert_eq!(rules.king(&state, ChessSide::White).unwrap(), white_king);
+    }
+
+    #[test]
+    fn king_cannot_move_or_capture_into_resulting_attack() {
+        let rules = ChessRules::standard();
+        let mut state = legal_test_state();
+        let king = add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let victim = add_piece(&mut state, 2, ROOK, ChessSide::Black, Position::new(4, 1));
+        add_piece(&mut state, 3, ROOK, ChessSide::Black, Position::new(7, 1));
+        add_piece(&mut state, 4, KING, ChessSide::Black, Position::new(7, 7));
+
+        let pseudo = rules.pseudo_moves(&state, king).unwrap();
+        assert!(pseudo.iter().any(|movement| movement.capture == Some(victim)));
+        let legal = rules.legal_moves(&state, king).unwrap();
+        assert!(!legal.iter().any(|movement| movement.to == Position::new(4, 1)));
+    }
+
+    #[test]
+    fn double_check_leaves_only_king_actions() {
+        let rules = ChessRules::standard();
+        let mut state = legal_test_state();
+        let king = add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        add_piece(&mut state, 2, ROOK, ChessSide::White, Position::new(0, 0));
+        add_piece(&mut state, 3, ROOK, ChessSide::Black, Position::new(4, 7));
+        add_piece(&mut state, 4, BISHOP, ChessSide::Black, Position::new(1, 3));
+        add_piece(&mut state, 5, KING, ChessSide::Black, Position::new(7, 7));
+
+        assert!(rules.in_check(&state, ChessSide::White).unwrap());
+        let legal = rules.legal_moves_for_side(&state, ChessSide::White).unwrap();
+        assert!(!legal.is_empty());
+        assert!(legal.iter().all(|movement| movement.actor == king));
+    }
+
+    #[test]
+    fn chess_interaction_exposes_only_legal_destinations() {
+        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+
+        let rules = ChessRules::standard();
+        let mut state = legal_test_state();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let rook = add_piece(&mut state, 2, ROOK, ChessSide::White, Position::new(4, 1));
+        add_piece(&mut state, 3, ROOK, ChessSide::Black, Position::new(4, 7));
+        add_piece(&mut state, 4, KING, ChessSide::Black, Position::new(7, 7));
+
+        let turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        let mut driver = InteractionDriver::new(ChessInteractionRules::new(&rules), turn).unwrap();
+        let rook_choice = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(choice.kind, ChoiceKind::SelectEntity { entity } if entity == rook))
+            .unwrap()
+            .id;
+        driver.choose(rook_choice).unwrap();
+
+        assert!(!driver.interaction().choices.iter().any(|choice| {
+            matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(3, 1))
+        }));
+        assert!(driver.interaction().choices.iter().any(|choice| {
+            matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(4, 2))
+        }));
     }
 
 }
