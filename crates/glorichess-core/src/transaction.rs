@@ -57,11 +57,6 @@ pub enum StateChange {
         from: PlayerId,
         to: PlayerId,
     },
-    EntityMoveCountChanged {
-        entity: EntityId,
-        from: u32,
-        to: u32,
-    },
     EntityStateChanged {
         entity: EntityId,
         before: EntityData,
@@ -144,13 +139,6 @@ impl StateDelta {
                     entity: *id,
                     from: old.controller,
                     to: new.controller,
-                });
-            }
-            if old.move_count != new.move_count {
-                changes.push(StateChange::EntityMoveCountChanged {
-                    entity: *id,
-                    from: old.move_count,
-                    to: new.move_count,
                 });
             }
             if old.state != new.state {

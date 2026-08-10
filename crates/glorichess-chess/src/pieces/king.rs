@@ -1,5 +1,5 @@
 use crate::{
-    piece::{leaper_attacks, leaper_moves, standard_presentation},
+    piece::{has_moved, leaper_attacks, leaper_moves, standard_presentation},
     ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, ChessRules, PseudoMove, KING, ROOK,
 };
 use glorichess_core::{
@@ -50,7 +50,7 @@ pub(crate) fn castling_moves(
     let king = context.entity();
     let side = context.side()?;
     let home_rank = side.home_rank();
-    if king.move_count != 0 || king.position != Position::new(4, home_rank) {
+    if has_moved(king) || king.position != Position::new(4, home_rank) {
         return Ok(Vec::new());
     }
     if rules.in_check(context.state(), side)? {
@@ -66,7 +66,7 @@ pub(crate) fn castling_moves(
         let Some(rook) = context.entity_at(rook_position)? else {
             continue;
         };
-        if rook.entity_type != ROOK || rook.owner != king.owner || rook.move_count != 0 {
+        if rook.entity_type != ROOK || rook.owner != king.owner || has_moved(rook) {
             continue;
         }
         let mut clear = true;

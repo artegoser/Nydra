@@ -1,4 +1,5 @@
 use crate::{
+    piece::has_moved,
     pieces::pawn::en_passant_moves_from_previous, ChessError, ChessPieceContext,
     ChessRules, ChessSide, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
 };
@@ -288,14 +289,14 @@ impl ChessRules {
             let Some(king) = state.entity_at(Position::new(4, rank)).ok().flatten() else {
                 continue;
             };
-            if king.entity_type != KING || king.owner != side.player() || king.move_count != 0 {
+            if king.entity_type != KING || king.owner != side.player() || has_moved(king) {
                 continue;
             }
             for (rook_x, bit) in [(7_u16, king_side_bit), (0_u16, queen_side_bit)] {
                 let Some(rook) = state.entity_at(Position::new(rook_x, rank)).ok().flatten() else {
                     continue;
                 };
-                if rook.entity_type == ROOK && rook.owner == side.player() && rook.move_count == 0 {
+                if rook.entity_type == ROOK && rook.owner == side.player() && !has_moved(rook) {
                     rights |= bit;
                 }
             }

@@ -18,7 +18,6 @@ pub struct EntityState {
     pub owner: PlayerId,
     pub controller: PlayerId,
     pub position: Position,
-    pub move_count: u32,
     pub state: EntityData,
 }
 
@@ -35,7 +34,6 @@ impl EntityState {
             owner,
             controller: owner,
             position,
-            move_count: 0,
             state: EntityData::new(),
         }
     }
@@ -178,9 +176,7 @@ impl GameState {
 
         self.board.clear(from, id)?;
         self.board.place(to, id)?;
-        let entity = self.entity_mut(id)?;
-        entity.position = to;
-        entity.move_count = entity.move_count.saturating_add(1);
+        self.entity_mut(id)?.position = to;
         Ok(())
     }
 

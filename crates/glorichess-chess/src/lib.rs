@@ -104,6 +104,24 @@ mod tests {
     }
 
     #[test]
+    fn standard_movement_history_state_is_sparse_and_piece_local() {
+        let state = standard_chess_state().unwrap();
+        for entity in state.entities.values() {
+            if entity.entity_type == KING || entity.entity_type == ROOK {
+                assert_eq!(
+                    entity
+                        .state
+                        .get(crate::piece::HAS_MOVED_STATE)
+                        .and_then(glorichess_core::StateValue::as_bool),
+                    Some(false)
+                );
+            } else {
+                assert!(!entity.state.contains_key(crate::piece::HAS_MOVED_STATE));
+            }
+        }
+    }
+
+    #[test]
     fn standard_registry_contains_all_six_piece_rules() {
         let rules = ChessRules::standard();
         for entity_type in [PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING] {
@@ -153,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn pawn_double_move_requires_start_rank_and_unmoved_state() {
+    fn pawn_double_move_is_derived_from_start_rank() {
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
         let pawn = add_piece(&mut state, 1, PAWN, ChessSide::White, Position::new(3, 3));
@@ -164,10 +182,9 @@ mod tests {
 
         state.remove_entity(pawn).unwrap();
         let pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(3, 1));
-        state.entity_mut(pawn).unwrap().move_count = 1;
         assert_eq!(
             destinations(&rules.pseudo_moves(&state, pawn).unwrap()),
-            BTreeSet::from([Position::new(3, 2)])
+            BTreeSet::from([Position::new(3, 2), Position::new(3, 3)])
         );
     }
 
@@ -594,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    fn castling_is_derived_from_king_and_rook_move_counts() {
+    fn castling_is_derived_from_king_and_rook_entity_state() {
         use glorichess_core::TurnSession;
 
         let rules = ChessRules::standard();
@@ -622,8 +639,8 @@ mod tests {
         rules.execute_move(&mut turn, None, castle, None).unwrap();
         assert_eq!(turn.working.entity(king).unwrap().position, Position::new(6, 0));
         assert_eq!(turn.working.entity(king_rook).unwrap().position, Position::new(5, 0));
-        assert_eq!(turn.working.entity(king).unwrap().move_count, 1);
-        assert_eq!(turn.working.entity(king_rook).unwrap().move_count, 1);
+        assert!(crate::piece::has_moved(turn.working.entity(king).unwrap()));
+        assert!(crate::piece::has_moved(turn.working.entity(king_rook).unwrap()));
     }
 
     #[test]
@@ -643,15 +660,17 @@ mod tests {
         state.remove_entity(EntityId::new(4)).unwrap();
         state.move_entity(rook, Position::new(7, 1)).unwrap();
         state.move_entity(rook, Position::new(7, 0)).unwrap();
+        crate::piece::set_has_moved(state.entity_mut(rook).unwrap(), true);
         assert!(!rules
             .legal_moves(&state, king)
             .unwrap()
             .iter()
             .any(|movement| movement.to == Position::new(6, 0)));
 
-        state.entity_mut(rook).unwrap().move_count = 0;
+        crate::piece::set_has_moved(state.entity_mut(rook).unwrap(), false);
         state.move_entity(king, Position::new(4, 1)).unwrap();
         state.move_entity(king, Position::new(4, 0)).unwrap();
+        crate::piece::set_has_moved(state.entity_mut(king).unwrap(), true);
         assert!(!rules
             .legal_moves(&state, king)
             .unwrap()
@@ -829,7 +848,7 @@ mod tests {
         let no_history = History::default();
         let key_with_rights = rules.position_key(&with_rights, &no_history).unwrap();
         let mut without_rights = with_rights.clone();
-        without_rights.entity_mut(rook).unwrap().move_count = 1;
+        crate::piece::set_has_moved(without_rights.entity_mut(rook).unwrap(), true);
         let key_without_rights = rules.position_key(&without_rights, &no_history).unwrap();
         assert_ne!(key_with_rights, key_without_rights);
 

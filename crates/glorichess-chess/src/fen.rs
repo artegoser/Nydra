@@ -1,5 +1,6 @@
 use crate::{
-    ChessError, ChessRules, ChessSide, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
+    piece::set_has_moved, pieces::pawn::turn_records_entity_move, ChessError, ChessRules, ChessSide,
+    BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
 };
 pub const STANDARD_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -105,7 +106,6 @@ impl ChessRules {
         let mut previous = state;
         let mut pawn_before = previous.remove_entity(pawn_id)?;
         pawn_before.position = previous_pawn_square;
-        pawn_before.move_count = pawn_before.move_count.saturating_sub(1);
         previous.add_entity(pawn_before)?;
         previous.set_active_players(vec![mover.player()])?;
         self.set_halfmove_clock(&mut previous, 0);
@@ -194,7 +194,7 @@ fn parse_placement(state: &mut GameState, field: &str) -> Result<(), ChessError>
             let id = EntityId::new(next_id);
             next_id = next_id.saturating_add(1);
             let mut entity = EntityState::new(id, entity_type, side.player(), Position::new(x, y));
-            entity.move_count = imported_move_count(entity_type, side, entity.position);
+            set_has_moved(&mut entity, true);
             state.add_entity(entity)?;
             x += 1;
         }
@@ -206,16 +206,6 @@ fn parse_placement(state: &mut GameState, field: &str) -> Result<(), ChessError>
         }
     }
     Ok(())
-}
-
-fn imported_move_count(entity_type: EntityTypeId, side: ChessSide, position: Position) -> u32 {
-    if entity_type == PAWN {
-        return u32::from(position.y != side.pawn_start_rank());
-    }
-    if entity_type == KING || entity_type == ROOK {
-        return 1;
-    }
-    0
 }
 
 fn apply_castling_metadata(state: &mut GameState, field: &str) -> Result<(), ChessError> {
@@ -248,7 +238,7 @@ fn apply_castling_metadata(state: &mut GameState, field: &str) -> Result<(), Che
         if let Some(king_id) = entity_id_at(state, Position::new(4, rank))? {
             let king = state.entity_mut(king_id)?;
             if king.entity_type == KING && king.owner == side.player() {
-                king.move_count = u32::from(!any_right);
+                set_has_moved(king, !any_right);
             } else if any_right {
                 return Err(ChessError::InvalidFen("castling right has no matching king".into()));
             }
@@ -261,7 +251,7 @@ fn apply_castling_metadata(state: &mut GameState, field: &str) -> Result<(), Che
             if let Some(rook_id) = entity_id_at(state, Position::new(x, rank))? {
                 let rook = state.entity_mut(rook_id)?;
                 if rook.entity_type == ROOK && rook.owner == side.player() {
-                    rook.move_count = u32::from(!has_right);
+                    set_has_moved(rook, !has_right);
                 } else if has_right {
                     return Err(ChessError::InvalidFen("castling right has no matching rook".into()));
                 }
@@ -368,12 +358,14 @@ fn fen_en_passant_target(state: &GameState, history: &History) -> Option<Positio
     for after in previous.after.entities.values().filter(|entity| entity.entity_type == PAWN) {
         let before = previous.before.entities.get(&after.id)?;
         let side = ChessSide::from_player(after.owner)?;
+        let was_double_pawn_move =
+            turn_records_entity_move(previous, after.id, before.position, after.position);
         if before.entity_type == PAWN
             && before.position.x == after.position.x
             && before.position.y == side.pawn_start_rank()
             && i32::from(after.position.y) - i32::from(before.position.y)
                 == i32::from(side.forward() * 2)
-            && before.move_count.saturating_add(1) == after.move_count
+            && was_double_pawn_move
         {
             return Some(Position::new(
                 after.position.x,
@@ -425,18 +417,18 @@ mod tests {
     }
 
     #[test]
-    fn imported_castling_rights_control_move_counts() {
+    fn imported_castling_rights_control_piece_state() {
         let rules = ChessRules::standard();
         let imported = rules
             .from_fen("r3k2r/8/8/8/8/8/8/R3K2R w Kq - 7 12")
             .unwrap();
         let state = imported.timeline.current();
-        assert_eq!(state.entity_at(Position::new(4, 0)).unwrap().unwrap().move_count, 0);
-        assert_eq!(state.entity_at(Position::new(7, 0)).unwrap().unwrap().move_count, 0);
-        assert_eq!(state.entity_at(Position::new(0, 0)).unwrap().unwrap().move_count, 1);
-        assert_eq!(state.entity_at(Position::new(4, 7)).unwrap().unwrap().move_count, 0);
-        assert_eq!(state.entity_at(Position::new(0, 7)).unwrap().unwrap().move_count, 0);
-        assert_eq!(state.entity_at(Position::new(7, 7)).unwrap().unwrap().move_count, 1);
+        assert!(!crate::piece::has_moved(state.entity_at(Position::new(4, 0)).unwrap().unwrap()));
+        assert!(!crate::piece::has_moved(state.entity_at(Position::new(7, 0)).unwrap().unwrap()));
+        assert!(crate::piece::has_moved(state.entity_at(Position::new(0, 0)).unwrap().unwrap()));
+        assert!(!crate::piece::has_moved(state.entity_at(Position::new(4, 7)).unwrap().unwrap()));
+        assert!(!crate::piece::has_moved(state.entity_at(Position::new(0, 7)).unwrap().unwrap()));
+        assert!(crate::piece::has_moved(state.entity_at(Position::new(7, 7)).unwrap().unwrap()));
     }
 
     #[test]

@@ -83,7 +83,7 @@ mod tests {
         );
         state.move_entity(entity_id, Position::new(2, 2)).unwrap();
         assert!(state.entity_at(Position::new(1, 1)).unwrap().is_none());
-        assert_eq!(state.entity(entity_id).unwrap().move_count, 1);
+        assert!(state.entity(entity_id).unwrap().state.is_empty());
         assert_eq!(
             state.entity(entity_id).unwrap().position,
             Position::new(2, 2)

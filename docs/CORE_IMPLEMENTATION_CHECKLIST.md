@@ -9,17 +9,17 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 - [x] Core supports `TeamId` independently from `PlayerId`.
 - [x] Entities have distinct `owner` and `controller` fields.
 - [x] Entities have stable IDs and an extensible custom-state mechanism.
-- [x] Entities expose `move_count` or equivalent persistent movement state.
+- [x] Core entities carry no ruleset-specific movement-history field; rulesets use entity-local state/history as needed.
 - [x] History is readable by rules, not only by undo code.
-- [ ] Normal-play en passant is derived from history rather than a global target flag.
-- [ ] Normal-play castling eligibility is derived from entity/current state rather than global castling-right bits.
+- [x] Normal-play en passant is derived from history rather than a global target flag.
+- [x] Normal-play castling eligibility is derived from entity/current state rather than global castling-right bits.
 - [x] Piece/rule code can mutate a transactional working game state directly.
 - [x] Gameplay is not constrained by a closed central `Effect` enum.
 - [x] Structural state changes are separately exposed for frontend animation/debugging.
 - [x] Optional semantic presentation cues are non-authoritative.
 - [x] One player turn may contain multiple sequential steps.
 - [x] Continuation choices are computed from the updated working state after each step.
-- [ ] Frontend interaction is driven by Rust-provided choices/opaque IDs.
+- [x] Frontend interaction is driven by Rust-provided choices/opaque IDs.
 - [x] Chess attack semantics are separate from movement semantics.
 - [x] Speculative legality states are never committed to history.
 
@@ -51,7 +51,7 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 - [x] Implement `EntityState`/entity store.
 - [x] Add entity `owner`.
 - [x] Add entity `controller`.
-- [x] Add entity `move_count`.
+- [x] Keep movement-history semantics out of generic `EntityState`.
 - [x] Add extensible entity-local state storage.
 - [x] Add ruleset-local state extension point.
 - [x] Define and enforce core state invariants.
@@ -189,9 +189,9 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 ### Pawn double move
 
 - [x] Require appropriate starting geometry/state.
-- [x] Require `move_count == 0` or equivalent chess condition.
+- [x] Derive initial double-step eligibility from the pawn starting rank.
 - [x] Require both traversed/destination cells to be free.
-- [x] Increment movement state on execution.
+- [x] Do not store pawn movement flags solely for double-step eligibility.
 
 ### En passant
 
@@ -209,9 +209,9 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 ### Castling
 
 - [x] Do not add normal-play global castling-right bits.
-- [x] Require king `move_count == 0`.
+- [x] Require king entity-local `has_moved == false`.
 - [x] Locate the correct rook.
-- [x] Require rook `move_count == 0`.
+- [x] Require rook entity-local `has_moved == false`.
 - [x] Require clear path.
 - [x] Reject while king is currently in check.
 - [x] Reject if transit square is attacked.
@@ -332,7 +332,7 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [x] Raise the dragged piece above normal pieces/animations.
 - [x] Show a translucent origin ghost when highlighting is enabled.
 - [x] Keep legal destination markers visible while dragging.
-- [x] Add Lichess-style legal-destination hover feedback during drag.
+- [x] Add Lichess-style legal-destination hover feedback during drag and ordinary pointer hover.
 - [x] Drop on a legal target by submitting its existing Rust `ChoiceId`.
 - [x] Cancel cleanly when dropped on origin, outside the board, or on an illegal target.
 - [x] Ensure cancelled drag leaves authoritative state unchanged.
@@ -390,7 +390,7 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 
 - [x] Match the default Lichess brown-board visual relationship closely.
 - [x] Match Lichess-like piece scale/alignment within squares.
-- [x] Restore the original rounded outer board corners and clip board overlays/pieces consistently.
+- [x] Keep subtle rounded outer board corners, clip overlays/pieces consistently, and avoid clipping coordinate labels.
 - [x] Remove current GloriChess-only destination marker styling that visibly differs from Lichess.
 - [x] Remove/adjust current board-only styling that visibly prevents side-by-side Lichess parity.
 - [x] Do not add any Lichess/Chessground runtime dependency.

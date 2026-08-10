@@ -1,5 +1,5 @@
 use crate::{
-    pieces::king::castling_moves, Bishop, ChessError, ChessMoveKind, ChessPieceContext,
+    piece::set_has_moved, pieces::king::castling_moves, Bishop, ChessError, ChessMoveKind, ChessPieceContext,
     ChessPieceRule, ChessSide, King, Knight, Pawn, PseudoMove, Queen, Rook, BISHOP, KING, KNIGHT,
     PAWN, QUEEN, ROOK,
 };
@@ -140,7 +140,9 @@ fn add_piece(
 ) -> Result<EntityId, ChessError> {
     let id = EntityId::new(*next_id);
     *next_id = (*next_id).saturating_add(1);
-    state.add_entity(EntityState::new(id, entity_type, side.player(), position))?;
+    let mut entity = EntityState::new(id, entity_type, side.player(), position);
+    set_has_moved(&mut entity, false);
+    state.add_entity(entity)?;
     Ok(id)
 }
 
@@ -414,11 +416,17 @@ impl ChessRules {
             ChessMoveKind::Castle { rook, rook_to } => {
                 state.move_entity(movement.actor, movement.to)?;
                 state.move_entity(rook, rook_to)?;
+                set_has_moved(state.entity_mut(rook)?, true);
             }
         }
 
+        if actor_type == KING || actor_type == ROOK {
+            set_has_moved(state.entity_mut(movement.actor)?, true);
+        }
         if let Some(promote_to) = promotion {
-            state.entity_mut(movement.actor)?.entity_type = promote_to;
+            let promoted = state.entity_mut(movement.actor)?;
+            promoted.entity_type = promote_to;
+            set_has_moved(promoted, true);
         }
         if advance_turn {
             self.update_halfmove_clock_for_move(state, actor_type, is_capture);

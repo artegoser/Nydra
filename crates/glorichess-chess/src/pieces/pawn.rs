@@ -3,8 +3,8 @@ use crate::{
     ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, PAWN,
 };
 use glorichess_core::{
-    EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
-    StateChange, TurnRecord,
+    EntityId, EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
+    StateChange, StateValue, TurnRecord,
 };
 
 pub struct Pawn;
@@ -34,7 +34,7 @@ impl ChessPieceRule for Pawn {
                 moves.push(context.pseudo_move(one)?);
 
                 let on_start = from.y == side.pawn_start_rank();
-                if on_start && context.entity().move_count == 0 {
+                if on_start {
                     if let Some(two) = offset(context.state(), from, 0, side.forward() * 2) {
                         if context.is_empty(two)? {
                             moves.push(context.pseudo_move(two)?);
@@ -91,6 +91,30 @@ fn ensure_type(context: ChessPieceContext<'_>, expected: EntityTypeId) -> Result
 }
 
 
+pub(crate) fn turn_records_entity_move(
+    previous: &TurnRecord,
+    entity: EntityId,
+    from: Position,
+    to: Position,
+) -> bool {
+    previous.steps.iter().any(|step| {
+        let action_actor = step
+            .action
+            .data
+            .get("actor")
+            .and_then(StateValue::as_u64);
+        step.action.kind == "chess_move"
+            && action_actor == Some(u64::from(entity.get()))
+            && step.delta.changes.iter().any(|change| {
+                matches!(
+                    change,
+                    StateChange::EntityMoved { entity: moved, from: actual_from, to: actual_to }
+                        if *moved == entity && *actual_from == from && *actual_to == to
+                )
+            })
+    })
+}
+
 pub(crate) fn en_passant_moves_from_previous(
     context: ChessPieceContext<'_>,
     previous: &TurnRecord,
@@ -127,7 +151,6 @@ pub(crate) fn en_passant_moves_from_previous(
             || before.position.x != after.position.x
             || before.position.y != enemy_side.pawn_start_rank()
             || after.position != adjacent_position
-            || before.move_count.saturating_add(1) != after.move_count
         {
             continue;
         }
@@ -136,18 +159,12 @@ pub(crate) fn en_passant_moves_from_previous(
             continue;
         }
 
-        let was_moved = previous.steps.iter().any(|step| {
-            step.delta.changes.iter().any(|change| {
-                matches!(
-                    change,
-                    StateChange::EntityMoved { entity, from, to }
-                        if *entity == adjacent.id
-                            && *from == before.position
-                            && *to == after.position
-                )
-            })
-        });
-        if !was_moved {
+        if !turn_records_entity_move(
+            previous,
+            adjacent.id,
+            before.position,
+            after.position,
+        ) {
             continue;
         }
 

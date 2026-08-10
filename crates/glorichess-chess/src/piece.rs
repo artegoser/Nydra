@@ -12,6 +12,28 @@ pub const ROOK: EntityTypeId = EntityTypeId::new(4);
 pub const QUEEN: EntityTypeId = EntityTypeId::new(5);
 pub const KING: EntityTypeId = EntityTypeId::new(6);
 
+pub(crate) const HAS_MOVED_STATE: &str = "has_moved";
+
+pub(crate) const fn tracks_has_moved(entity_type: EntityTypeId) -> bool {
+    entity_type.get() == KING.get() || entity_type.get() == ROOK.get()
+}
+
+pub(crate) fn has_moved(entity: &EntityState) -> bool {
+    entity
+        .state
+        .get(HAS_MOVED_STATE)
+        .and_then(glorichess_core::StateValue::as_bool)
+        .unwrap_or(false)
+}
+
+pub(crate) fn set_has_moved(entity: &mut EntityState, moved: bool) {
+    if tracks_has_moved(entity.entity_type) {
+        entity.state.insert(HAS_MOVED_STATE, moved);
+    } else {
+        entity.state.remove(HAS_MOVED_STATE);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ChessPieceKind {
     Pawn,

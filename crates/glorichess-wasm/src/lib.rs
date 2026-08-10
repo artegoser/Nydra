@@ -316,7 +316,6 @@ pub struct EntityView {
     pub owner: u32,
     pub controller: u32,
     pub position: PositionView,
-    pub move_count: u32,
     pub asset_key: String,
     pub label: Option<String>,
     pub presentation_data: StateMap,
@@ -373,7 +372,6 @@ fn build_game_view(
             owner: entity.owner.get(),
             controller: entity.controller.get(),
             position: entity.position.into(),
-            move_count: entity.move_count,
             asset_key: presentation.asset_key,
             label: presentation.label,
             presentation_data: presentation.data,
@@ -602,7 +600,6 @@ pub struct EntitySnapshotView {
     pub owner: u32,
     pub controller: u32,
     pub position: PositionView,
-    pub move_count: u32,
     pub state: StateMap,
 }
 
@@ -614,7 +611,6 @@ impl From<&EntityState> for EntitySnapshotView {
             owner: entity.owner.get(),
             controller: entity.controller.get(),
             position: entity.position.into(),
-            move_count: entity.move_count,
             state: entity.state.clone(),
         }
     }
@@ -680,7 +676,6 @@ pub enum ChangeView {
     EntityTypeChanged { entity: u32, from: u32, to: u32 },
     EntityOwnerChanged { entity: u32, from: u32, to: u32 },
     EntityControllerChanged { entity: u32, from: u32, to: u32 },
-    EntityMoveCountChanged { entity: u32, from: u32, to: u32 },
     EntityStateChanged { entity: u32, before: StateMap, after: StateMap },
     PlayerAdded { player: PlayerSnapshotView },
     PlayerRemoved { player: PlayerSnapshotView },
@@ -727,13 +722,6 @@ impl From<&StateChange> for ChangeView {
                     entity: entity.get(),
                     from: from.get(),
                     to: to.get(),
-                }
-            }
-            StateChange::EntityMoveCountChanged { entity, from, to } => {
-                Self::EntityMoveCountChanged {
-                    entity: entity.get(),
-                    from: *from,
-                    to: *to,
                 }
             }
             StateChange::EntityStateChanged { entity, before, after } => Self::EntityStateChanged {

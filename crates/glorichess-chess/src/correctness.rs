@@ -28,7 +28,13 @@ mod tests {
                     Some(promotion),
                 )
                 .unwrap();
-            assert_eq!(turn.working.entity(pawn).unwrap().entity_type, promotion);
+            let promoted = turn.working.entity(pawn).unwrap();
+            assert_eq!(promoted.entity_type, promotion);
+            if promotion == ROOK {
+                assert!(crate::piece::has_moved(promoted));
+            } else {
+                assert!(!promoted.state.contains_key(crate::piece::HAS_MOVED_STATE));
+            }
         }
     }
 
@@ -60,14 +66,14 @@ mod tests {
         timeline.commit_turn(turn).unwrap();
         let moved_fen = rules.to_fen(timeline.current(), timeline.history()).unwrap();
         assert_ne!(moved_fen, initial_fen);
-        assert_eq!(timeline.current().entity(rook).unwrap().move_count, 1);
+        assert!(crate::piece::has_moved(timeline.current().entity(rook).unwrap()));
 
         timeline.undo().unwrap();
         assert_eq!(rules.to_fen(timeline.current(), timeline.history()).unwrap(), initial_fen);
-        assert_eq!(timeline.current().entity(rook).unwrap().move_count, 0);
+        assert!(!crate::piece::has_moved(timeline.current().entity(rook).unwrap()));
 
         timeline.redo().unwrap();
         assert_eq!(rules.to_fen(timeline.current(), timeline.history()).unwrap(), moved_fen);
-        assert_eq!(timeline.current().entity(rook).unwrap().move_count, 1);
+        assert!(crate::piece::has_moved(timeline.current().entity(rook).unwrap()));
     }
 }

@@ -9,7 +9,6 @@ export interface EntityView {
 	owner: number;
 	controller: number;
 	position: PositionView;
-	move_count: number;
 	asset_key: string;
 	label: string | null;
 	presentation_data: unknown;
