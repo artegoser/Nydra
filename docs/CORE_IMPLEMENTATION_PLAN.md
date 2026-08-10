@@ -802,7 +802,13 @@ Standard pawn promotion is the first production proof: `Pawn` owns the trigger, 
 
 ### Phase 16 — Architecture proof
 
-Add test-only non-chess rules that prove custom state, explicit abilities, multi-step turns, history-dependent behavior, multiple players, and control changes work without modifying core architecture.
+Implement the internal `nydra-examples` crate described in [`EXAMPLE_RULESETS.md`](./EXAMPLE_RULESETS.md). It contains compact, non-product checkers, Go, and Rift rulesets chosen to stress materially different runtime paths without adding mechanic-specific concepts to `nydra-core`.
+
+- checkers proves mandatory capture, forced multi-capture continuation, piece-local promotion state, and multiple authoritative steps in one turn;
+- Go proves placement via entity spawning, group capture, pass, suicide rejection, and simple ko derived from committed history;
+- Rift proves arbitrary HP/mana state, explicit abilities, move + ability turns, target/option continuations, entity removal, history-derived rewind, three players/two teams, controller changes independent of owner, presentation cues, and team-level outcomes.
+
+These examples are verification fixtures, not shipped modes. Full rules coverage, frontend selection, notation, matchmaking, and production UX for these games remain out of scope.
 
 
 ### Phase 17 — Generic action notation and deterministic replay

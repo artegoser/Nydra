@@ -6,6 +6,7 @@ Nydra is a local-first programmable game runtime with a Svelte frontend. Its gen
 
 - `crates/nydra-core` — generic state, history, turns, interaction, and runtime primitives.
 - `crates/nydra-chess` — standard chess rules built on the generic core.
+- `crates/nydra-examples` — internal checkers, Go, and Rift architecture proofs; not product modes.
 - `crates/nydra-wasm` — browser bindings for the Rust runtime.
 - `src` — SvelteKit presentation and input layer.
 - `docs/CORE_IMPLEMENTATION_PLAN.md` — architecture and implementation plan.
@@ -13,6 +14,8 @@ Nydra is a local-first programmable game runtime with a Svelte frontend. Its gen
 - `docs/LICHESS_BOARD_UX_SPEC.md` — Lichess board interaction and visual parity specification.
 - `docs/GENERIC_ACTION_NOTATION.md` — ruleset-agnostic action recording and deterministic replay specification.
 - `docs/GENERIC_OUTCOME_RULES.md` — ruleset-wide terminal outcome contract and precedence rules.
+- `docs/GENERIC_GAME_RULES.md` — composition contract for entity-local and ruleset-wide mechanics.
+- `docs/EXAMPLE_RULESETS.md` — Phase 16 non-chess architecture proofs.
 
 ## Requirements
 
@@ -81,3 +84,5 @@ See:
 - [`docs/CORE_IMPLEMENTATION_CHECKLIST.md`](docs/CORE_IMPLEMENTATION_CHECKLIST.md)
 - [`docs/GENERIC_ACTION_NOTATION.md`](docs/GENERIC_ACTION_NOTATION.md)
 - [`docs/GENERIC_OUTCOME_RULES.md`](docs/GENERIC_OUTCOME_RULES.md)
+- [`docs/GENERIC_GAME_RULES.md`](docs/GENERIC_GAME_RULES.md)
+- [`docs/EXAMPLE_RULESETS.md`](docs/EXAMPLE_RULESETS.md)

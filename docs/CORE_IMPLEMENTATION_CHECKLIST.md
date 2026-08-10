@@ -512,22 +512,25 @@ Reference: [`GENERIC_GAME_RULES.md`](./GENERIC_GAME_RULES.md).
 
 ## Phase 16 — Architecture proof
 
-Create internal/test-only non-chess rules. Do not expose them as a product mode yet.
+Reference: [`EXAMPLE_RULESETS.md`](./EXAMPLE_RULESETS.md).
 
-- [ ] Register a test custom entity type without editing `nydra-core`.
-- [ ] Give the entity custom state such as HP/mana.
-- [ ] Expose an explicit named ability choice.
-- [ ] Mutate another entity's custom state.
-- [ ] Remove another entity based on resulting custom state.
-- [ ] Perform move + ability in two steps during one turn.
-- [ ] Force an additional continuation step.
-- [ ] Read historical state from the rule.
-- [ ] Restore/copy selected data from an older state in a test.
-- [ ] Create a test game with at least three `PlayerId`s.
-- [ ] Demonstrate team membership independent of player identity.
-- [ ] Change `controller` without changing `owner`.
-- [ ] Emit an optional semantic presentation cue.
-- [ ] Confirm all of the above required no new chess-specific or mechanic-specific core enum variants.
+- [x] Add internal `nydra-examples` without exposing new product modes in the web application.
+- [x] Register non-chess checker, Go stone, and Rift mage entity types without editing `nydra-core` enums.
+- [x] Give Rift entities custom HP/mana state.
+- [x] Expose explicit named Fireball, Rewind, and Hijack ability choices.
+- [x] Mutate another entity's custom state and remove it when Fireball damage reaches zero HP.
+- [x] Perform move + ability as two authoritative steps during one Rift turn.
+- [x] Force an additional checkers capture continuation after the first capture step.
+- [x] Read committed history for Go simple-ko legality.
+- [x] Restore selected Rift HP data from an older committed state.
+- [x] Create a Rift state with three `PlayerId`s.
+- [x] Demonstrate two players sharing one team while a third player belongs to another team.
+- [x] Change a Rift target's `controller` without changing `owner`.
+- [x] Emit semantic presentation cues for checkers promotion and Rift abilities.
+- [x] Prove a primary game action can be placement/spawn rather than movement through the Go example.
+- [x] Prove transactional group capture by removing multiple Go entities from one placement.
+- [x] Prove ruleset-level outcomes for checkers, Go, and the synthetic team mode.
+- [x] Confirm all examples use existing generic choices, transactions, state, history, teams, abilities, and outcomes with no mechanic-specific core enum variants.
 
 ## Phase 17 — Generic action notation and deterministic replay
 
