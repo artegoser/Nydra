@@ -50,37 +50,70 @@ mod tests {
     use super::*;
     use crate::standard_chess_state;
 
-    #[test]
-    fn initial_position_matches_reference_perft_through_depth_four() {
-        let rules = ChessRules::standard();
-        let timeline = GameTimeline::new(standard_chess_state().unwrap()).unwrap();
-        for (depth, expected) in [(1, 20), (2, 400), (3, 8_902), (4, 197_281)] {
-            assert_eq!(rules.perft(&timeline, depth).unwrap(), expected, "depth {depth}");
-        }
+    fn initial_timeline() -> GameTimeline {
+        GameTimeline::new(standard_chess_state().unwrap()).unwrap()
     }
 
-    #[test]
-    fn kiwipete_matches_castling_heavy_reference_perft() {
-        let rules = ChessRules::standard();
-        let timeline = rules
+    fn kiwipete_timeline(rules: &ChessRules) -> GameTimeline {
+        rules
             .from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1")
             .unwrap()
-            .timeline;
-        for (depth, expected) in [(1, 48), (2, 2_039), (3, 97_862)] {
+            .timeline
+    }
+
+    fn en_passant_timeline(rules: &ChessRules) -> GameTimeline {
+        rules
+            .from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")
+            .unwrap()
+            .timeline
+    }
+
+    #[test]
+    fn initial_position_matches_reference_perft_through_depth_three() {
+        let rules = ChessRules::standard();
+        let timeline = initial_timeline();
+        for (depth, expected) in [(1, 20), (2, 400), (3, 8_902)] {
             assert_eq!(rules.perft(&timeline, depth).unwrap(), expected, "depth {depth}");
         }
     }
 
     #[test]
-    fn en_passant_and_discovered_check_reference_position_matches_perft() {
+    #[ignore = "slow perft correctness gate"]
+    fn initial_position_matches_reference_perft_at_depth_four() {
         let rules = ChessRules::standard();
-        let timeline = rules
-            .from_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")
-            .unwrap()
-            .timeline;
-        for (depth, expected) in [(1, 14), (2, 191), (3, 2_812), (4, 43_238)] {
+        assert_eq!(rules.perft(&initial_timeline(), 4).unwrap(), 197_281);
+    }
+
+    #[test]
+    fn kiwipete_matches_castling_heavy_reference_perft_through_depth_two() {
+        let rules = ChessRules::standard();
+        let timeline = kiwipete_timeline(&rules);
+        for (depth, expected) in [(1, 48), (2, 2_039)] {
             assert_eq!(rules.perft(&timeline, depth).unwrap(), expected, "depth {depth}");
         }
+    }
+
+    #[test]
+    #[ignore = "slow perft correctness gate"]
+    fn kiwipete_matches_castling_heavy_reference_perft_at_depth_three() {
+        let rules = ChessRules::standard();
+        assert_eq!(rules.perft(&kiwipete_timeline(&rules), 3).unwrap(), 97_862);
+    }
+
+    #[test]
+    fn en_passant_and_discovered_check_reference_position_matches_perft_through_depth_three() {
+        let rules = ChessRules::standard();
+        let timeline = en_passant_timeline(&rules);
+        for (depth, expected) in [(1, 14), (2, 191), (3, 2_812)] {
+            assert_eq!(rules.perft(&timeline, depth).unwrap(), expected, "depth {depth}");
+        }
+    }
+
+    #[test]
+    #[ignore = "slow perft correctness gate"]
+    fn en_passant_and_discovered_check_reference_position_matches_perft_at_depth_four() {
+        let rules = ChessRules::standard();
+        assert_eq!(rules.perft(&en_passant_timeline(&rules), 4).unwrap(), 43_238);
     }
 
     #[test]

@@ -57,6 +57,12 @@ cargo check --workspace
 cargo clippy --workspace --all-targets --all-features
 ```
 
+The normal workspace suite keeps expensive depth-4 perft cases ignored so the development loop stays fast. Run the slow correctness gate explicitly when changing move generation, history semantics, or special-move execution:
+
+```bash
+cargo test --release -p glorichess-chess perft::tests:: -- --ignored
+```
+
 Frontend:
 
 ```bash

@@ -682,7 +682,7 @@ depth 3 = 8,902
 depth 4 = 197,281
 ```
 
-Add established special-rule perft positions covering castling, en passant, checks, and promotions.
+Add established special-rule perft positions covering castling, en passant, checks, and promotions. Keep expensive high-depth reference cases in an explicit release-mode slow correctness gate so `cargo test --workspace` remains suitable for the normal development loop; run the slow gate whenever move generation, history semantics, or special-move execution changes.
 
 ### 13.5 Architecture proof tests
 

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{ChessRules, ChessSide, BISHOP, KNIGHT, PAWN, QUEEN, ROOK, WHITE_PLAYER};
-    use glorichess_core::{GameTimeline, Position, TurnSession};
+    use glorichess_core::{Position, TurnSession};
 
     #[test]
     fn every_standard_promotion_type_executes() {
