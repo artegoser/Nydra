@@ -5,6 +5,6 @@ use wasm_bindgen::prelude::*;
 
 /// Confirms that the WASM package is loaded. Gameplay bindings are added in a later phase.
 #[wasm_bindgen]
-pub fn runtime_name() -> &'static str {
-    "glorichess"
+pub fn runtime_name() -> String {
+    "glorichess".to_owned()
 }
