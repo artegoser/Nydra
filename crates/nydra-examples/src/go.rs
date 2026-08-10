@@ -374,12 +374,15 @@ mod tests {
     }
 
     #[test]
-    fn placement_can_capture_a_group_without_move_semantics() {
+    fn placement_can_capture_a_multi_stone_group_without_move_semantics() {
         let mut state = empty_state(5);
         add_stone(&mut state, 1, WHITE, 2, 2);
-        add_stone(&mut state, 2, BLACK, 1, 2);
-        add_stone(&mut state, 3, BLACK, 3, 2);
-        add_stone(&mut state, 4, BLACK, 2, 1);
+        add_stone(&mut state, 2, WHITE, 2, 3);
+        add_stone(&mut state, 3, BLACK, 1, 2);
+        add_stone(&mut state, 4, BLACK, 3, 2);
+        add_stone(&mut state, 5, BLACK, 2, 1);
+        add_stone(&mut state, 6, BLACK, 1, 3);
+        add_stone(&mut state, 7, BLACK, 3, 3);
         state.set_active_players(vec![BLACK]).unwrap();
 
         let turn = TurnSession::new(&state, BLACK).unwrap();
@@ -389,18 +392,19 @@ mod tests {
             .choices
             .iter()
             .find(|choice| {
-                matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(2, 3))
+                matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(2, 4))
             })
             .unwrap()
             .clone();
         driver.choose(place.id).unwrap();
 
         assert!(driver.turn().working.entity(EntityId::new(1)).is_err());
+        assert!(driver.turn().working.entity(EntityId::new(2)).is_err());
         assert_eq!(
             driver
                 .turn()
                 .working
-                .entity_at(Position::new(2, 3))
+                .entity_at(Position::new(2, 4))
                 .unwrap()
                 .unwrap()
                 .owner,

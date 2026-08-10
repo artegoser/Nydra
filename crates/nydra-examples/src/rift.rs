@@ -703,6 +703,39 @@ mod tests {
     }
 
     #[test]
+    fn normal_fireball_mutates_target_hp_without_removing_the_entity() {
+        let state = standard_state();
+        let turn = TurnSession::new(&state, PLAYER_ONE).unwrap();
+        let mut driver = InteractionDriver::new(RiftInteractionRules::default(), turn).unwrap();
+        let actor = choose_entity(&driver, MAGE_ONE);
+        driver.choose(actor.id).unwrap();
+        let movement = driver.interaction().choices[0].clone();
+        driver.choose(movement.id).unwrap();
+        let fireball = choose_ability(&driver, FIREBALL);
+        driver.choose(fireball.id).unwrap();
+        let target = choose_entity(&driver, MAGE_THREE);
+        driver.choose(target.id).unwrap();
+        let normal = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(&choice.kind, ChoiceKind::SelectOption { key } if key == "normal"))
+            .unwrap()
+            .clone();
+        driver.choose(normal.id).unwrap();
+
+        assert_eq!(
+            entity_u64(driver.turn().working.entity(MAGE_THREE).unwrap(), HP),
+            Some(20)
+        );
+        assert!(driver.turn().steps[1]
+            .delta
+            .changes
+            .iter()
+            .any(|change| matches!(change, StateChange::EntityStateChanged { entity, .. } if *entity == MAGE_THREE)));
+    }
+
+    #[test]
     fn teams_are_independent_from_players_and_hijack_changes_only_controller() {
         let state = standard_state();
         assert_eq!(state.players[&PLAYER_ONE].team, Some(TEAM_ALPHA));
