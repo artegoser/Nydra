@@ -1,10 +1,11 @@
 use crate::{
-    Bishop, ChessError, ChessPieceContext, ChessPieceRule, ChessSide, King, Knight, Pawn,
-    PseudoMove, Queen, Rook, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
+    pieces::king::castling_moves, Bishop, ChessError, ChessMoveKind, ChessPieceContext,
+    ChessPieceRule, ChessSide, King, Knight, Pawn, PseudoMove, Queen, Rook, BISHOP, KING, KNIGHT,
+    PAWN, QUEEN, ROOK,
 };
 use glorichess_core::{
-    EntityId, EntityState, EntityTypeId, GameState, PlayerId, PlayerState, Position, TeamId,
-    TeamState,
+    EntityId, EntityState, EntityTypeId, GameState, History, PlayerId, PlayerState, Position,
+    RecordedAction, StateMap, TeamId, TeamState, TurnSession,
 };
 use std::collections::BTreeMap;
 
@@ -56,6 +57,20 @@ impl ChessSide {
         match self {
             Self::White => Self::Black,
             Self::Black => Self::White,
+        }
+    }
+
+    pub const fn home_rank(self) -> u16 {
+        match self {
+            Self::White => 0,
+            Self::Black => 7,
+        }
+    }
+
+    pub const fn promotion_rank(self) -> u16 {
+        match self {
+            Self::White => 7,
+            Self::Black => 0,
         }
     }
 }
@@ -171,9 +186,23 @@ impl ChessRules {
         state: &GameState,
         entity: EntityId,
     ) -> Result<Vec<PseudoMove>, ChessError> {
-        let context = ChessPieceContext::new(state, entity)?;
-        self.piece_rule(context.entity().entity_type)?
-            .pseudo_moves(context)
+        self.pseudo_moves_with_history(state, None, entity)
+    }
+
+    pub fn pseudo_moves_with_history(
+        &self,
+        state: &GameState,
+        history: Option<&History>,
+        entity: EntityId,
+    ) -> Result<Vec<PseudoMove>, ChessError> {
+        let context = ChessPieceContext::with_history(state, history, entity)?;
+        let mut moves = self
+            .piece_rule(context.entity().entity_type)?
+            .pseudo_moves(context)?;
+        if context.entity().entity_type == KING {
+            moves.extend(castling_moves(self, context)?);
+        }
+        Ok(moves)
     }
 
     pub fn attacks(
@@ -228,11 +257,20 @@ impl ChessRules {
         state: &GameState,
         entity: EntityId,
     ) -> Result<Vec<PseudoMove>, ChessError> {
+        self.legal_moves_with_history(state, None, entity)
+    }
+
+    pub fn legal_moves_with_history(
+        &self,
+        state: &GameState,
+        history: Option<&History>,
+        entity: EntityId,
+    ) -> Result<Vec<PseudoMove>, ChessError> {
         let actor = state.entity(entity)?;
         let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
         let mut legal = Vec::new();
 
-        for movement in self.pseudo_moves(state, entity)? {
+        for movement in self.pseudo_moves_with_history(state, history, entity)? {
             if let Some(captured) = movement.capture {
                 if state.entity(captured)?.entity_type == KING {
                     continue;
@@ -240,7 +278,7 @@ impl ChessRules {
             }
 
             let mut candidate = state.clone();
-            self.apply_basic_move(&mut candidate, &movement)?;
+            self.apply_move_unchecked(&mut candidate, &movement, None, false)?;
             if !self.in_check(&candidate, side)? {
                 legal.push(movement);
             }
@@ -254,30 +292,117 @@ impl ChessRules {
         state: &GameState,
         side: ChessSide,
     ) -> Result<Vec<PseudoMove>, ChessError> {
+        self.legal_moves_for_side_with_history(state, None, side)
+    }
+
+    pub fn legal_moves_for_side_with_history(
+        &self,
+        state: &GameState,
+        history: Option<&History>,
+        side: ChessSide,
+    ) -> Result<Vec<PseudoMove>, ChessError> {
         let mut legal = Vec::new();
         for entity in state
             .entities
             .values()
             .filter(|entity| entity.owner == side.player())
         {
-            legal.extend(self.legal_moves(state, entity.id)?);
+            legal.extend(self.legal_moves_with_history(state, history, entity.id)?);
         }
         Ok(legal)
     }
 
-    pub(crate) fn apply_basic_move(
+    pub fn execute_move(
+        &self,
+        turn: &mut TurnSession,
+        history: Option<&History>,
+        movement: PseudoMove,
+        promotion: Option<EntityTypeId>,
+    ) -> Result<(), ChessError> {
+        let actor = turn.working.entity(movement.actor)?;
+        let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
+        let legal = self.legal_moves_with_history(&turn.working, history, movement.actor)?;
+        if !legal.contains(&movement) {
+            return Err(ChessError::IllegalMove(movement.actor, movement.to));
+        }
+
+        let promotion_required = actor.entity_type == PAWN && movement.to.y == side.promotion_rank();
+        if promotion_required {
+            let Some(kind) = promotion else {
+                return Err(ChessError::PromotionRequired(movement.actor));
+            };
+            if !Self::is_promotion_type(kind) {
+                return Err(ChessError::InvalidPromotion(kind));
+            }
+        } else if promotion.is_some() {
+            return Err(ChessError::UnexpectedPromotion(movement.actor));
+        }
+
+        let mut action_data = StateMap::new();
+        action_data.insert("actor", u64::from(movement.actor.get()));
+        action_data.insert("from_x", u64::from(movement.from.x));
+        action_data.insert("from_y", u64::from(movement.from.y));
+        action_data.insert("to_x", u64::from(movement.to.x));
+        action_data.insert("to_y", u64::from(movement.to.y));
+        if let Some(kind) = promotion {
+            action_data.insert("promotion", u64::from(kind.get()));
+        }
+
+        turn.apply_transaction(
+            RecordedAction {
+                kind: "chess_move".into(),
+                data: action_data,
+            },
+            |transaction| {
+                self.apply_move_unchecked(transaction.raw_state_mut(), &movement, promotion, true)
+            },
+        )?;
+        Ok(())
+    }
+
+    pub const fn is_promotion_type(entity_type: EntityTypeId) -> bool {
+        entity_type.get() == QUEEN.get()
+            || entity_type.get() == ROOK.get()
+            || entity_type.get() == BISHOP.get()
+            || entity_type.get() == KNIGHT.get()
+    }
+
+    pub(crate) fn apply_move_unchecked(
         &self,
         state: &mut GameState,
         movement: &PseudoMove,
+        promotion: Option<EntityTypeId>,
+        advance_turn: bool,
     ) -> Result<(), ChessError> {
         let actor = state.entity(movement.actor)?;
+        let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
         if actor.position != movement.from {
             return Err(ChessError::StaleMove(movement.actor));
         }
-        if let Some(captured) = movement.capture {
-            state.remove_entity(captured)?;
+
+        match movement.kind {
+            ChessMoveKind::Normal => {
+                if let Some(captured) = movement.capture {
+                    state.remove_entity(captured)?;
+                }
+                state.move_entity(movement.actor, movement.to)?;
+            }
+            ChessMoveKind::EnPassant { victim } => {
+                state.remove_entity(victim)?;
+                state.move_entity(movement.actor, movement.to)?;
+            }
+            ChessMoveKind::Castle { rook, rook_to } => {
+                state.move_entity(movement.actor, movement.to)?;
+                state.move_entity(rook, rook_to)?;
+            }
         }
-        state.move_entity(movement.actor, movement.to)?;
+
+        if let Some(promote_to) = promotion {
+            state.entity_mut(movement.actor)?.entity_type = promote_to;
+        }
+        if advance_turn {
+            state.set_active_players(vec![side.opponent().player()])?;
+        }
         Ok(())
     }
 }

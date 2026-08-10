@@ -14,7 +14,7 @@ pub use game::{
 };
 pub use interaction::ChessInteractionRules;
 pub use piece::{
-    ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP, KING, KNIGHT, PAWN,
+    ChessMoveKind, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP, KING, KNIGHT, PAWN,
     QUEEN, ROOK,
 };
 pub use pieces::{Bishop, King, Knight, Pawn, Queen, Rook};
@@ -359,6 +359,304 @@ mod tests {
         assert!(driver.interaction().choices.iter().any(|choice| {
             matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(4, 2))
         }));
+    }
+
+    #[test]
+    fn en_passant_is_derived_from_the_previous_committed_turn() {
+        use glorichess_core::GameTimeline;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let white_pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(4, 4));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let black_pawn = add_piece(&mut state, 4, PAWN, ChessSide::Black, Position::new(3, 6));
+        state.set_active_players(vec![BLACK_PLAYER]).unwrap();
+
+        let mut timeline = GameTimeline::new(state).unwrap();
+        let mut black_turn = timeline.begin_turn(BLACK_PLAYER).unwrap();
+        let double = rules
+            .legal_moves(&black_turn.working, black_pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(3, 4))
+            .unwrap();
+        rules.execute_move(&mut black_turn, None, double, None).unwrap();
+        timeline.commit_turn(black_turn).unwrap();
+
+        let ep = rules
+            .legal_moves_with_history(timeline.current(), Some(timeline.history()), white_pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(3, 5))
+            .unwrap();
+        assert!(matches!(ep.kind, ChessMoveKind::EnPassant { victim } if victim == black_pawn));
+
+        let mut white_turn = timeline.begin_turn(WHITE_PLAYER).unwrap();
+        rules
+            .execute_move(&mut white_turn, Some(timeline.history()), ep, None)
+            .unwrap();
+        assert!(white_turn.working.entities.get(&black_pawn).is_none());
+        assert_eq!(
+            white_turn.working.entity(white_pawn).unwrap().position,
+            Position::new(3, 5)
+        );
+    }
+
+    #[test]
+    fn black_can_en_passant_after_white_double_move() {
+        use glorichess_core::GameTimeline;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let white_pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(3, 1));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let black_pawn = add_piece(&mut state, 4, PAWN, ChessSide::Black, Position::new(4, 3));
+
+        let mut timeline = GameTimeline::new(state).unwrap();
+        let mut white_turn = timeline.begin_turn(WHITE_PLAYER).unwrap();
+        let double = rules
+            .legal_moves(&white_turn.working, white_pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(3, 3))
+            .unwrap();
+        rules.execute_move(&mut white_turn, None, double, None).unwrap();
+        timeline.commit_turn(white_turn).unwrap();
+
+        let moves = rules
+            .legal_moves_with_history(timeline.current(), Some(timeline.history()), black_pawn)
+            .unwrap();
+        assert!(moves.iter().any(|movement| {
+            movement.to == Position::new(3, 2)
+                && matches!(movement.kind, ChessMoveKind::EnPassant { victim } if victim == white_pawn)
+        }));
+    }
+
+    #[test]
+    fn en_passant_expires_after_the_immediate_reply() {
+        use glorichess_core::GameTimeline;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        let white_king = add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let white_pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(4, 4));
+        let black_king = add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let black_pawn = add_piece(&mut state, 4, PAWN, ChessSide::Black, Position::new(3, 6));
+        state.set_active_players(vec![BLACK_PLAYER]).unwrap();
+
+        let mut timeline = GameTimeline::new(state).unwrap();
+        let mut black_turn = timeline.begin_turn(BLACK_PLAYER).unwrap();
+        let double = rules
+            .legal_moves(&black_turn.working, black_pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(3, 4))
+            .unwrap();
+        rules.execute_move(&mut black_turn, None, double, None).unwrap();
+        timeline.commit_turn(black_turn).unwrap();
+
+        let mut white_turn = timeline.begin_turn(WHITE_PLAYER).unwrap();
+        let king_move = rules
+            .legal_moves_with_history(&white_turn.working, Some(timeline.history()), white_king)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(5, 0))
+            .unwrap();
+        rules
+            .execute_move(&mut white_turn, Some(timeline.history()), king_move, None)
+            .unwrap();
+        timeline.commit_turn(white_turn).unwrap();
+
+        let mut black_turn = timeline.begin_turn(BLACK_PLAYER).unwrap();
+        let king_move = rules
+            .legal_moves_with_history(&black_turn.working, Some(timeline.history()), black_king)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(5, 7))
+            .unwrap();
+        rules
+            .execute_move(&mut black_turn, Some(timeline.history()), king_move, None)
+            .unwrap();
+        timeline.commit_turn(black_turn).unwrap();
+
+        let legal = rules
+            .legal_moves_with_history(timeline.current(), Some(timeline.history()), white_pawn)
+            .unwrap();
+        assert!(!legal.iter().any(|movement| matches!(movement.kind, ChessMoveKind::EnPassant { .. })));
+    }
+
+    #[test]
+    fn en_passant_is_rejected_when_it_exposes_the_king() {
+        use glorichess_core::GameTimeline;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(7, 4));
+        let white_pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(6, 4));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(7, 7));
+        add_piece(&mut state, 4, ROOK, ChessSide::Black, Position::new(0, 4));
+        let black_pawn = add_piece(&mut state, 5, PAWN, ChessSide::Black, Position::new(5, 6));
+        state.set_active_players(vec![BLACK_PLAYER]).unwrap();
+
+        let mut timeline = GameTimeline::new(state).unwrap();
+        let mut black_turn = timeline.begin_turn(BLACK_PLAYER).unwrap();
+        let double = rules
+            .legal_moves(&black_turn.working, black_pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(5, 4))
+            .unwrap();
+        rules.execute_move(&mut black_turn, None, double, None).unwrap();
+        timeline.commit_turn(black_turn).unwrap();
+
+        let legal = rules
+            .legal_moves_with_history(timeline.current(), Some(timeline.history()), white_pawn)
+            .unwrap();
+        assert!(!legal.iter().any(|movement| movement.to == Position::new(5, 5)));
+    }
+
+    #[test]
+    fn castling_is_derived_from_king_and_rook_move_counts() {
+        use glorichess_core::TurnSession;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        let king = add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let queen_rook = add_piece(&mut state, 2, ROOK, ChessSide::White, Position::new(0, 0));
+        let king_rook = add_piece(&mut state, 3, ROOK, ChessSide::White, Position::new(7, 0));
+        add_piece(&mut state, 4, KING, ChessSide::Black, Position::new(4, 7));
+
+        let legal = rules.legal_moves(&state, king).unwrap();
+        assert!(legal.iter().any(|movement| {
+            movement.to == Position::new(6, 0)
+                && matches!(movement.kind, ChessMoveKind::Castle { rook, .. } if rook == king_rook)
+        }));
+        assert!(legal.iter().any(|movement| {
+            movement.to == Position::new(2, 0)
+                && matches!(movement.kind, ChessMoveKind::Castle { rook, .. } if rook == queen_rook)
+        }));
+
+        let castle = legal
+            .into_iter()
+            .find(|movement| movement.to == Position::new(6, 0))
+            .unwrap();
+        let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        rules.execute_move(&mut turn, None, castle, None).unwrap();
+        assert_eq!(turn.working.entity(king).unwrap().position, Position::new(6, 0));
+        assert_eq!(turn.working.entity(king_rook).unwrap().position, Position::new(5, 0));
+        assert_eq!(turn.working.entity(king).unwrap().move_count, 1);
+        assert_eq!(turn.working.entity(king_rook).unwrap().move_count, 1);
+    }
+
+    #[test]
+    fn castling_rejects_attacked_transit_and_previously_moved_pieces() {
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        let king = add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let rook = add_piece(&mut state, 2, ROOK, ChessSide::White, Position::new(7, 0));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        add_piece(&mut state, 4, ROOK, ChessSide::Black, Position::new(5, 7));
+        assert!(!rules
+            .legal_moves(&state, king)
+            .unwrap()
+            .iter()
+            .any(|movement| movement.to == Position::new(6, 0)));
+
+        state.remove_entity(EntityId::new(4)).unwrap();
+        state.move_entity(rook, Position::new(7, 1)).unwrap();
+        state.move_entity(rook, Position::new(7, 0)).unwrap();
+        assert!(!rules
+            .legal_moves(&state, king)
+            .unwrap()
+            .iter()
+            .any(|movement| movement.to == Position::new(6, 0)));
+
+        state.entity_mut(rook).unwrap().move_count = 0;
+        state.move_entity(king, Position::new(4, 1)).unwrap();
+        state.move_entity(king, Position::new(4, 0)).unwrap();
+        assert!(!rules
+            .legal_moves(&state, king)
+            .unwrap()
+            .iter()
+            .any(|movement| movement.to == Position::new(6, 0)));
+    }
+
+    #[test]
+    fn promotion_waits_for_an_explicit_interaction_choice_and_supports_underpromotion() {
+        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(0, 6));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+
+        let turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        let mut driver = InteractionDriver::new(ChessInteractionRules::new(&rules), turn).unwrap();
+        let pawn_choice = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(choice.kind, ChoiceKind::SelectEntity { entity } if entity == pawn))
+            .unwrap()
+            .id;
+        driver.choose(pawn_choice).unwrap();
+        let destination = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(0, 7)))
+            .unwrap()
+            .id;
+        driver.choose(destination).unwrap();
+
+        let option_keys = driver
+            .interaction()
+            .choices
+            .iter()
+            .filter_map(|choice| match &choice.kind {
+                ChoiceKind::SelectOption { key } => Some(key.as_str()),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(option_keys, BTreeSet::from(["bishop", "knight", "queen", "rook"]));
+        assert_eq!(driver.turn().steps.len(), 0);
+
+        let knight = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(&choice.kind, ChoiceKind::SelectOption { key } if key == "knight"))
+            .unwrap()
+            .id;
+        driver.choose(knight).unwrap();
+        assert!(driver.is_finished());
+        assert_eq!(driver.turn().steps.len(), 1);
+        assert_eq!(driver.turn().working.entity(pawn).unwrap().entity_type, KNIGHT);
+    }
+
+    #[test]
+    fn capture_promotion_removes_the_target_and_changes_type() {
+        use glorichess_core::TurnSession;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(1, 6));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let victim = add_piece(&mut state, 4, ROOK, ChessSide::Black, Position::new(2, 7));
+        let movement = rules
+            .legal_moves(&state, pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(2, 7))
+            .unwrap();
+        let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        rules.execute_move(&mut turn, None, movement, Some(BISHOP)).unwrap();
+        assert!(turn.working.entities.get(&victim).is_none());
+        assert_eq!(turn.working.entity(pawn).unwrap().entity_type, BISHOP);
     }
 
 }

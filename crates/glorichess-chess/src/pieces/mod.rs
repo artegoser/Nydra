@@ -1,5 +1,5 @@
 mod bishop;
-mod king;
+pub(crate) mod king;
 mod knight;
 mod pawn;
 mod queen;

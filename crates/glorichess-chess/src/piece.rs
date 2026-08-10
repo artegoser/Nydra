@@ -1,7 +1,7 @@
 use crate::{ChessError, ChessSide};
 use glorichess_core::{
     EntityId, EntityPresentation, EntityRule, EntityRuleContext, EntityState, EntityTypeId,
-    GameState, Position, RuleError,
+    GameState, History, Position, RuleError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -47,11 +47,20 @@ impl ChessPieceKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ChessMoveKind {
+    Normal,
+    EnPassant { victim: EntityId },
+    Castle { rook: EntityId, rook_to: Position },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PseudoMove {
     pub actor: EntityId,
     pub from: Position,
     pub to: Position,
     pub capture: Option<EntityId>,
+    pub kind: ChessMoveKind,
 }
 
 impl PseudoMove {
@@ -66,6 +75,38 @@ impl PseudoMove {
             from,
             to,
             capture,
+            kind: ChessMoveKind::Normal,
+        }
+    }
+
+    pub const fn en_passant(
+        actor: EntityId,
+        from: Position,
+        to: Position,
+        victim: EntityId,
+    ) -> Self {
+        Self {
+            actor,
+            from,
+            to,
+            capture: Some(victim),
+            kind: ChessMoveKind::EnPassant { victim },
+        }
+    }
+
+    pub const fn castle(
+        actor: EntityId,
+        from: Position,
+        to: Position,
+        rook: EntityId,
+        rook_to: Position,
+    ) -> Self {
+        Self {
+            actor,
+            from,
+            to,
+            capture: None,
+            kind: ChessMoveKind::Castle { rook, rook_to },
         }
     }
 }
@@ -73,13 +114,23 @@ impl PseudoMove {
 #[derive(Clone, Copy)]
 pub struct ChessPieceContext<'a> {
     state: &'a GameState,
+    history: Option<&'a History>,
     entity: &'a EntityState,
 }
 
 impl<'a> ChessPieceContext<'a> {
     pub fn new(state: &'a GameState, entity: EntityId) -> Result<Self, ChessError> {
+        Self::with_history(state, None, entity)
+    }
+
+    pub fn with_history(
+        state: &'a GameState,
+        history: Option<&'a History>,
+        entity: EntityId,
+    ) -> Result<Self, ChessError> {
         Ok(Self {
             state,
+            history,
             entity: state.entity(entity)?,
         })
     }
@@ -90,6 +141,10 @@ impl<'a> ChessPieceContext<'a> {
 
     pub const fn entity(self) -> &'a EntityState {
         self.entity
+    }
+
+    pub const fn history(self) -> Option<&'a History> {
+        self.history
     }
 
     pub fn side(self) -> Result<ChessSide, ChessError> {

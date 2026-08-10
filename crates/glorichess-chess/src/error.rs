@@ -1,4 +1,4 @@
-use glorichess_core::{CoreError, EntityId, EntityTypeId, PlayerId};
+use glorichess_core::{CoreError, EntityId, EntityTypeId, PlayerId, Position};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
@@ -23,4 +23,12 @@ pub enum ChessError {
     MultipleKings(PlayerId),
     #[error("move for entity {0} was generated for a stale position")]
     StaleMove(EntityId),
+    #[error("entity {0} has no legal move to {1}")]
+    IllegalMove(EntityId, Position),
+    #[error("pawn {0} requires a promotion choice")]
+    PromotionRequired(EntityId),
+    #[error("entity type {0} is not a legal promotion type")]
+    InvalidPromotion(EntityTypeId),
+    #[error("entity {0} cannot promote on this move")]
+    UnexpectedPromotion(EntityId),
 }

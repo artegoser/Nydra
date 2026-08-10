@@ -188,51 +188,51 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ### Pawn double move
 
-- [ ] Require appropriate starting geometry/state.
-- [ ] Require `move_count == 0` or equivalent chess condition.
-- [ ] Require both traversed/destination cells to be free.
-- [ ] Increment movement state on execution.
+- [x] Require appropriate starting geometry/state.
+- [x] Require `move_count == 0` or equivalent chess condition.
+- [x] Require both traversed/destination cells to be free.
+- [x] Increment movement state on execution.
 
 ### En passant
 
-- [ ] Do not add a normal-play global en-passant target flag.
-- [ ] Pawn detects adjacent enemy pawn.
-- [ ] Pawn inspects the immediately preceding completed action/state transition.
-- [ ] Verify the exact adjacent pawn was the previous actor/mover.
-- [ ] Verify the pawn moved exactly two ranks in a legal initial double move.
-- [ ] Generate the correct destination.
-- [ ] Remove the bypassed pawn during the candidate transition.
-- [ ] Allow en passant only immediately after the double move.
-- [ ] Reject en passant if the resulting state exposes own king.
-- [ ] Test en passant for both colors/sides.
+- [x] Do not add a normal-play global en-passant target flag.
+- [x] Pawn detects adjacent enemy pawn.
+- [x] Pawn inspects the immediately preceding completed action/state transition.
+- [x] Verify the exact adjacent pawn was the previous actor/mover.
+- [x] Verify the pawn moved exactly two ranks in a legal initial double move.
+- [x] Generate the correct destination.
+- [x] Remove the bypassed pawn during the candidate transition.
+- [x] Allow en passant only immediately after the double move.
+- [x] Reject en passant if the resulting state exposes own king.
+- [x] Test en passant for both colors/sides.
 
 ### Castling
 
-- [ ] Do not add normal-play global castling-right bits.
-- [ ] Require king `move_count == 0`.
-- [ ] Locate the correct rook.
-- [ ] Require rook `move_count == 0`.
-- [ ] Require clear path.
-- [ ] Reject while king is currently in check.
-- [ ] Reject if transit square is attacked.
-- [ ] Reject if destination square is attacked.
-- [ ] Move king and rook in one chess action/step.
-- [ ] Support king-side castling for both sides.
-- [ ] Support queen-side castling for both sides.
-- [ ] Verify rook moved away and returned still cannot castle.
-- [ ] Verify king moved away and returned still cannot castle.
+- [x] Do not add normal-play global castling-right bits.
+- [x] Require king `move_count == 0`.
+- [x] Locate the correct rook.
+- [x] Require rook `move_count == 0`.
+- [x] Require clear path.
+- [x] Reject while king is currently in check.
+- [x] Reject if transit square is attacked.
+- [x] Reject if destination square is attacked.
+- [x] Move king and rook in one chess action/step.
+- [x] Support king-side castling for both sides.
+- [x] Support queen-side castling for both sides.
+- [x] Verify rook moved away and returned still cannot castle.
+- [x] Verify king moved away and returned still cannot castle.
 
 ### Promotion
 
-- [ ] Detect promotion rank after pawn move/capture selection.
-- [ ] Request explicit promotion choice from Rust interaction layer.
-- [ ] Offer queen.
-- [ ] Offer rook.
-- [ ] Offer bishop.
-- [ ] Offer knight.
-- [ ] Apply chosen type change.
-- [ ] Support promotion after capture.
-- [ ] Support underpromotion.
+- [x] Detect promotion rank after pawn move/capture selection.
+- [x] Request explicit promotion choice from Rust interaction layer.
+- [x] Offer queen.
+- [x] Offer rook.
+- [x] Offer bishop.
+- [x] Offer knight.
+- [x] Apply chosen type change.
+- [x] Support promotion after capture.
+- [x] Support underpromotion.
 
 ## Phase 9 — Chess outcomes and draw rules
 
