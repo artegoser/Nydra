@@ -1,6 +1,5 @@
 use crate::{
-    ChessError, ChessRules, ChessSide, BISHOP, BLACK_PLAYER, KING, KNIGHT, PAWN, QUEEN, ROOK,
-    WHITE_PLAYER,
+    ChessError, ChessRules, ChessSide, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
 };
 use glorichess_core::{EntityId, EntityState, EntityTypeId, GameState, GameTimeline, History, Position};
 
@@ -412,7 +411,7 @@ fn offset_rank(position: Position, dy: i16) -> Result<Position, ChessError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ChessMoveKind;
+    use crate::{ChessMoveKind, WHITE_PLAYER};
 
     #[test]
     fn standard_fen_roundtrips() {
@@ -497,7 +496,9 @@ mod tests {
             .unwrap();
         rules.execute_move(&mut turn, Some(timeline.history()), movement, None).unwrap();
         timeline.commit_turn(turn).unwrap();
-        assert!(rules.to_fen(timeline.current(), timeline.history()).unwrap().ends_with(" 1 24"));
+        assert_eq!(rules.halfmove_clock(timeline.current()), 0);
+        assert_eq!(rules.fullmove_number(timeline.current()), 24);
+        assert!(rules.to_fen(timeline.current(), timeline.history()).unwrap().ends_with(" 0 24"));
         assert_eq!(timeline.current().turn.active_players, vec![WHITE_PLAYER]);
     }
 }
