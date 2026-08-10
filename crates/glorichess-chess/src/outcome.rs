@@ -367,7 +367,7 @@ impl ChessRules {
             let context = ChessPieceContext::new(state, pawn.id)?;
             for movement in en_passant_moves_from_previous(context, previous_turn)? {
                 let mut candidate = state.clone();
-                self.apply_move_unchecked(&mut candidate, &movement, None, false)?;
+                self.apply_move_unchecked(&mut candidate, &movement)?;
                 if !self.in_check(&candidate, side)? {
                     targets.push(movement.to);
                 }

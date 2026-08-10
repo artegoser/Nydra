@@ -31,13 +31,13 @@ It must also not record ephemeral `ChoiceId` values. A `ChoiceId` is valid only 
 The universal replay identity of a choice is therefore its deterministic semantic payload:
 
 ```rust
-RecordedChoice {
+ChoiceInput {
     kind: ChoiceKind,
     data: StateMap,
 }
 ```
 
-`label` is presentation and is not part of canonical identity.
+`label` and `asset_key` are presentation and are not part of canonical identity.
 
 Within one generated `Interaction`, `(ChoiceKind, data)` must identify at most one choice. Phase 17 should enforce this invariant so a recorded choice can be resolved unambiguously during replay.
 
@@ -48,7 +48,7 @@ A committed `TurnRecord` should gain an ordered decision trace in addition to it
 ```rust
 TurnRecord {
     actor: PlayerId,
-    decisions: Vec<RecordedChoice>,
+    decisions: Vec<ChoiceInput>,
     before: GameState,
     steps: Vec<StepRecord>,
     after: GameState,
@@ -108,7 +108,7 @@ For every recorded turn:
 
 1. start a `TurnSession` for the recorded actor;
 2. create the ruleset's normal `InteractionDriver`;
-3. for each `RecordedChoice`, inspect the currently generated `Interaction`;
+3. for each `ChoiceInput`, inspect the currently generated `Interaction`;
 4. find exactly one choice whose `kind` and deterministic `data` equal the recorded choice;
 5. submit that choice's newly generated ephemeral `ChoiceId`;
 6. require the turn to finish at the same point as the record;
@@ -131,7 +131,7 @@ GameRecord
 ├─ initial state or ruleset-specific initial-state payload
 ├─ optional metadata
 ├─ committed turns
-│  └─ actor + ordered RecordedChoice values
+│  └─ actor + ordered ChoiceInput values
 ├─ optional terminal/outcome metadata
 └─ optional verification hashes
 ```

@@ -41,6 +41,10 @@ pub enum ChessError {
     InvalidPromotion(EntityTypeId),
     #[error("entity {0} cannot promote on this move")]
     UnexpectedPromotion(EntityId),
+    #[error("entity {0} does not accept move input for this move")]
+    UnexpectedMoveInput(EntityId),
+    #[error("move input for entity {0} is rejected by the active game rules")]
+    MoveInputRejected(EntityId),
     #[error("standard chess requires exactly one active player")]
     InvalidTurnState,
     #[error("the requested draw claim is not currently valid")]

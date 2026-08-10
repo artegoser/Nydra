@@ -1,9 +1,7 @@
-use crate::{
-    ChessError, ChessRules, ChessSide, PseudoMove, BISHOP, KNIGHT, PAWN, QUEEN, ROOK,
-};
+use crate::{ChessError, ChessRules, ChessSide, PseudoMove};
 use glorichess_core::{
-    Choice, ChoiceKind, ChoiceSpec, EntityId, History, InteractionError, InteractionFlow,
-    InteractionRules, StateMap, TurnSession,
+    Choice, ChoiceInput, ChoiceKind, ChoiceSpec, EntityId, History, InteractionError, InteractionFlow,
+    InteractionRules, RuleContext, StateMap, TurnSession,
 };
 
 const SELECTED_ENTITY: &str = "chess.selected_entity";
@@ -84,24 +82,28 @@ impl ChessInteractionRules {
             .map_err(Self::rule_error)
     }
 
-    fn promotion_type(key: &str) -> Option<glorichess_core::EntityTypeId> {
-        match key {
-            "queen" => Some(QUEEN),
-            "rook" => Some(ROOK),
-            "bishop" => Some(BISHOP),
-            "knight" => Some(KNIGHT),
-            _ => None,
-        }
+    fn movement_to(
+        &self,
+        turn: &TurnSession,
+        actor: EntityId,
+        target: glorichess_core::Position,
+    ) -> Result<PseudoMove, InteractionError> {
+        self.legal_moves(turn, actor)?
+            .into_iter()
+            .find(|movement| movement.to == target)
+            .ok_or_else(|| {
+                InteractionError::RuleViolation("selected destination is not legal".into())
+            })
     }
 
     fn execute(
         &self,
         turn: &mut TurnSession,
         movement: PseudoMove,
-        promotion: Option<glorichess_core::EntityTypeId>,
+        input: Option<&ChoiceInput>,
     ) -> Result<InteractionFlow, InteractionError> {
         self.rules
-            .execute_move(turn, self.history.as_ref(), movement, promotion)
+            .execute_move(turn, self.history.as_ref(), movement, input)
             .map_err(Self::rule_error)?;
         Ok(InteractionFlow::FinishTurn)
     }
@@ -116,40 +118,29 @@ impl InteractionRules for ChessInteractionRules {
         let side = self.side_to_move(turn)?;
         let empty_history = History::default();
         let history = self.history.as_ref().unwrap_or(&empty_history);
-        if self.rules.status(&turn.working, history).map_err(Self::rule_error)?.outcome.is_some() {
+        if self
+            .rules
+            .status(&turn.working, history)
+            .map_err(Self::rule_error)?
+            .outcome
+            .is_some()
+        {
             return Ok(Vec::new());
         }
 
         if let Some(target) = Self::pending_target(draft) {
             let actor = Self::selected_entity(draft).ok_or_else(|| {
-                InteractionError::RuleViolation("promotion target has no selected pawn".into())
+                InteractionError::RuleViolation("pending continuation has no selected entity".into())
             })?;
-            let piece = turn.working.entity(actor)?;
-            let side = ChessSide::from_player(piece.owner).ok_or_else(|| {
-                InteractionError::RuleViolation("promotion pawn has no chess side".into())
-            })?;
-            let side_name = match side {
-                ChessSide::White => "white",
-                ChessSide::Black => "black",
-            };
-            let mut choices = Vec::new();
-            for (key, label, entity_type) in [
-                ("queen", "Queen", QUEEN),
-                ("rook", "Rook", ROOK),
-                ("bishop", "Bishop", BISHOP),
-                ("knight", "Knight", KNIGHT),
-            ] {
-                let mut choice = ChoiceSpec::option(key).with_label(label);
-                choice.data.insert("actor", u64::from(actor.get()));
-                choice.data.insert("target_x", u64::from(target.x));
-                choice.data.insert("target_y", u64::from(target.y));
-                choice
-                    .data
-                    .insert("entity_type", u64::from(entity_type.get()));
-                choice
-                    .data
-                    .insert("asset_key", format!("chess/{side_name}/{key}"));
-                choices.push(choice);
+            let movement = self.movement_to(turn, actor, target)?;
+            let choices = self
+                .rules
+                .move_choices(&turn.working, self.history.as_ref(), movement, draft)
+                .map_err(Self::rule_error)?;
+            if choices.is_empty() {
+                return Err(InteractionError::RuleViolation(
+                    "pending move continuation no longer has legal choices".into(),
+                ));
             }
             return Ok(choices);
         }
@@ -162,26 +153,54 @@ impl InteractionRules for ChessInteractionRules {
             .filter(|entity| entity.controller == side.player())
         {
             let legal_moves = self.legal_moves(turn, entity.id)?;
-            if legal_moves.is_empty() {
-                continue;
-            }
-            choices.push(ChoiceSpec::entity(entity.id));
+            let mut destinations = Vec::new();
             for movement in legal_moves {
+                let local_continuations = self
+                    .rules
+                    .piece_move_choices(&turn.working, self.history.as_ref(), movement)
+                    .map_err(Self::rule_error)?;
+                if !local_continuations.is_empty()
+                    && self
+                        .rules
+                        .move_choices(&turn.working, self.history.as_ref(), movement, draft)
+                        .map_err(Self::rule_error)?
+                        .is_empty()
+                {
+                    // A game rule filtered every required piece-local continuation,
+                    // therefore this move cannot currently be completed.
+                    continue;
+                }
+
                 let mut choice = ChoiceSpec::position(movement.to);
                 choice.data.insert("actor", u64::from(entity.id.get()));
                 if let Some(capture) = movement.capture {
                     choice.data.insert("capture", u64::from(capture.get()));
                 }
-                choice.data.insert("move_kind", match movement.kind {
-                    crate::ChessMoveKind::Normal => "normal",
-                    crate::ChessMoveKind::EnPassant { .. } => "en_passant",
-                    crate::ChessMoveKind::Castle { .. } => "castle",
-                });
-                choices.push(choice);
+                choice.data.insert(
+                    "move_kind",
+                    match movement.kind {
+                        crate::ChessMoveKind::Normal => "normal",
+                        crate::ChessMoveKind::EnPassant { .. } => "en_passant",
+                        crate::ChessMoveKind::Castle { .. } => "castle",
+                    },
+                );
+                destinations.push(choice);
             }
+            if destinations.is_empty() {
+                continue;
+            }
+            choices.push(ChoiceSpec::entity(entity.id));
+            choices.extend(destinations);
         }
 
-        Ok(choices)
+        self.rules
+            .resolve_game_choices(
+                RuleContext::from_turn(turn, self.history.as_ref()),
+                side.player(),
+                draft,
+                choices,
+            )
+            .map_err(Self::rule_error)
     }
 
     fn apply_choice(
@@ -190,6 +209,25 @@ impl InteractionRules for ChessInteractionRules {
         draft: &mut StateMap,
         choice: &Choice,
     ) -> Result<InteractionFlow, InteractionError> {
+        if let Some(flow) = self
+            .rules
+            .apply_game_choice(self.history.as_ref(), turn, draft, choice)
+            .map_err(Self::rule_error)?
+        {
+            return Ok(flow);
+        }
+
+        if let Some(target) = Self::pending_target(draft) {
+            let actor = Self::selected_entity(draft).ok_or_else(|| {
+                InteractionError::RuleViolation("pending continuation has no selected entity".into())
+            })?;
+            let movement = self.movement_to(turn, actor, target)?;
+            let input = ChoiceInput::from(choice);
+            let result = self.execute(turn, movement, Some(&input))?;
+            Self::clear_selection(draft);
+            return Ok(result);
+        }
+
         match &choice.kind {
             ChoiceKind::SelectEntity { entity } => {
                 if Self::selected_entity(draft) == Some(*entity) {
@@ -233,43 +271,26 @@ impl InteractionRules for ChessInteractionRules {
                         actor_from_choice
                     }
                 };
-                let movement = self
-                    .legal_moves(turn, actor)?
-                    .into_iter()
-                    .find(|movement| movement.to == *position)
-                    .ok_or_else(|| {
-                        InteractionError::RuleViolation("selected destination is not legal".into())
-                    })?;
-                let piece = turn.working.entity(actor)?;
-                let side = ChessSide::from_player(piece.owner).ok_or_else(|| {
-                    InteractionError::RuleViolation("selected entity has no chess side".into())
-                })?;
-                if piece.entity_type == PAWN && position.y == side.promotion_rank() {
+                let movement = self.movement_to(turn, actor, *position)?;
+                let local_continuations = self
+                    .rules
+                    .piece_move_choices(&turn.working, self.history.as_ref(), movement)
+                    .map_err(Self::rule_error)?;
+                if !local_continuations.is_empty() {
+                    let choices = self
+                        .rules
+                        .move_choices(&turn.working, self.history.as_ref(), movement, draft)
+                        .map_err(Self::rule_error)?;
+                    if choices.is_empty() {
+                        return Err(InteractionError::RuleViolation(
+                            "move has no legal continuation after game-rule filtering".into(),
+                        ));
+                    }
                     Self::set_pending_target(draft, *position);
                     return Ok(InteractionFlow::Continue);
                 }
+
                 let result = self.execute(turn, movement, None)?;
-                Self::clear_selection(draft);
-                Ok(result)
-            }
-            ChoiceKind::SelectOption { key } => {
-                let actor = Self::selected_entity(draft).ok_or_else(|| {
-                    InteractionError::RuleViolation("no pawn is selected for promotion".into())
-                })?;
-                let target = Self::pending_target(draft).ok_or_else(|| {
-                    InteractionError::RuleViolation("no promotion is pending".into())
-                })?;
-                let promotion = Self::promotion_type(key).ok_or_else(|| {
-                    InteractionError::RuleViolation("invalid promotion choice".into())
-                })?;
-                let movement = self
-                    .legal_moves(turn, actor)?
-                    .into_iter()
-                    .find(|movement| movement.to == target)
-                    .ok_or_else(|| {
-                        InteractionError::RuleViolation("promotion move is no longer legal".into())
-                    })?;
-                let result = self.execute(turn, movement, Some(promotion))?;
                 Self::clear_selection(draft);
                 Ok(result)
             }

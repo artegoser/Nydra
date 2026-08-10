@@ -15,9 +15,16 @@ pub enum ChoiceKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ChoiceInput {
+    pub kind: ChoiceKind,
+    pub data: StateMap,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ChoiceSpec {
     pub kind: ChoiceKind,
     pub label: Option<String>,
+    pub asset_key: Option<String>,
     pub data: StateMap,
 }
 
@@ -26,6 +33,7 @@ impl ChoiceSpec {
         Self {
             kind,
             label: None,
+            asset_key: None,
             data: StateMap::new(),
         }
     }
@@ -54,6 +62,20 @@ impl ChoiceSpec {
         self.label = Some(label.into());
         self
     }
+
+    pub fn with_asset_key(mut self, asset_key: impl Into<String>) -> Self {
+        self.asset_key = Some(asset_key.into());
+        self
+    }
+}
+
+impl From<&ChoiceSpec> for ChoiceInput {
+    fn from(choice: &ChoiceSpec) -> Self {
+        Self {
+            kind: choice.kind.clone(),
+            data: choice.data.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -61,7 +83,17 @@ pub struct Choice {
     pub id: ChoiceId,
     pub kind: ChoiceKind,
     pub label: Option<String>,
+    pub asset_key: Option<String>,
     pub data: StateMap,
+}
+
+impl From<&Choice> for ChoiceInput {
+    fn from(choice: &Choice) -> Self {
+        Self {
+            kind: choice.kind.clone(),
+            data: choice.data.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -102,6 +134,7 @@ impl ChoiceIssuer {
                     id: ChoiceId::new(self.next_choice_id),
                     kind: spec.kind,
                     label: spec.label,
+                    asset_key: spec.asset_key,
                     data: spec.data,
                 }
             })

@@ -18,12 +18,12 @@ pub use history::{
 };
 pub use ids::{AbilityId, ChoiceId, EntityId, EntityTypeId, PlayerId, TeamId};
 pub use interaction::{
-    recorded_step, Choice, ChoiceIssuer, ChoiceKind, ChoiceSpec, Interaction, InteractionDriver,
+    recorded_step, Choice, ChoiceInput, ChoiceIssuer, ChoiceKind, ChoiceSpec, Interaction, InteractionDriver,
     InteractionError, InteractionFlow, InteractionRules, InteractionUpdate,
 };
 pub use rules::{
     AbilityRule, EntityPresentation, EntityRule, EntityRuleContext, GameOutcome, GameRule,
-    OutcomeRule, RuleContext, RuleError, RuleRegistry,
+    GameRuleSet, OutcomeRule, RuleContext, RuleError, RuleRegistry,
 };
 pub use state::{
     EntityData, EntityState, EntityStore, GameState, PlayerData, PlayerState, PlayerStore,
@@ -726,6 +726,76 @@ mod tests {
         }
     }
 
+
+    struct AddGlobalChoiceRule;
+
+    impl GameRule for AddGlobalChoiceRule {
+        fn choices(
+            &self,
+            _context: RuleContext<'_>,
+            _actor: PlayerId,
+            _draft: &StateMap,
+        ) -> Result<Vec<ChoiceSpec>, RuleError> {
+            Ok(vec![ChoiceSpec::option("global")])
+        }
+
+        fn apply_choice(
+            &self,
+            _history: Option<&History>,
+            _turn: &mut TurnSession,
+            draft: &mut StateMap,
+            choice: &Choice,
+        ) -> Result<Option<InteractionFlow>, RuleError> {
+            if matches!(&choice.kind, ChoiceKind::SelectOption { key } if key == "global") {
+                draft.insert("global_used", true);
+                return Ok(Some(InteractionFlow::Continue));
+            }
+            Ok(None)
+        }
+    }
+
+    struct EnvironmentReactionRule {
+        entity: EntityId,
+    }
+
+    impl GameRule for EnvironmentReactionRule {
+        fn react(
+            &self,
+            before: &GameState,
+            _action: &RecordedAction,
+            transaction: &mut Transaction,
+        ) -> Result<(), RuleError> {
+            let before_position = before.entity(self.entity)?.position;
+            let after_position = transaction.entity(self.entity)?.position;
+            if before_position != after_position && after_position == Position::new(1, 0) {
+                transaction
+                    .entity_mut(self.entity)?
+                    .state
+                    .insert("environment_hit", true);
+            }
+            Ok(())
+        }
+    }
+
+    struct RemoveBlockedChoiceRule;
+
+    impl GameRule for RemoveBlockedChoiceRule {
+        fn transform_choices(
+            &self,
+            _context: RuleContext<'_>,
+            _actor: PlayerId,
+            _draft: &StateMap,
+            choices: Vec<ChoiceSpec>,
+        ) -> Result<Vec<ChoiceSpec>, RuleError> {
+            Ok(choices
+                .into_iter()
+                .filter(|choice| {
+                    !matches!(&choice.kind, ChoiceKind::SelectOption { key } if key == "blocked")
+                })
+                .collect())
+        }
+    }
+
     struct TestAbilityRule;
 
     impl AbilityRule for TestAbilityRule {
@@ -864,6 +934,126 @@ mod tests {
         assert_eq!(outcome.key, "test.primary");
         assert_eq!(outcome.winners, vec![PlayerId::new(1)]);
         assert!(outcome.losers.is_empty());
+    }
+
+    #[test]
+    fn choice_input_keeps_semantics_but_drops_ephemeral_presentation() {
+        let mut spec = ChoiceSpec::option("upgrade")
+            .with_label("Upgrade now")
+            .with_asset_key("test/upgrade");
+        spec.data.insert("level", 2_u64);
+        let input = ChoiceInput::from(&spec);
+        let mut issued = ChoiceIssuer::default().issue(vec![spec]);
+        let choice = issued.choices.remove(0);
+        let issued_input = ChoiceInput::from(&choice);
+
+        assert_eq!(input.kind, ChoiceKind::SelectOption { key: "upgrade".into() });
+        assert_eq!(input.data.get("level").and_then(StateValue::as_u64), Some(2));
+        assert_eq!(choice.label.as_deref(), Some("Upgrade now"));
+        assert_eq!(choice.asset_key.as_deref(), Some("test/upgrade"));
+        assert_eq!(issued_input, input);
+        assert!(!input.data.contains_key("asset_key"));
+    }
+
+    #[test]
+    fn game_rules_compose_global_choices_and_transforms_in_registration_order() {
+        let state = sample_state();
+        let mut registry = RuleRegistry::new();
+        registry.register_game(AddGlobalChoiceRule);
+        registry.register_game(RemoveBlockedChoiceRule);
+
+        let choices = registry
+            .resolve_choices(
+                RuleContext::from_state(&state, None),
+                PlayerId::new(1),
+                &StateMap::new(),
+                vec![ChoiceSpec::option("allowed"), ChoiceSpec::option("blocked")],
+            )
+            .unwrap();
+
+        assert_eq!(registry.game_rule_count(), 2);
+        let keys = choices
+            .iter()
+            .filter_map(|choice| match &choice.kind {
+                ChoiceKind::SelectOption { key } => Some(key.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(keys, vec!["allowed", "global"]);
+
+        let forced = registry
+            .game_rules()
+            .transform_choices(
+                RuleContext::from_state(&state, None),
+                PlayerId::new(1),
+                &StateMap::new(),
+                vec![ChoiceSpec::option("allowed"), ChoiceSpec::option("blocked")],
+            )
+            .unwrap();
+        let forced_keys = forced
+            .iter()
+            .filter_map(|choice| match &choice.kind {
+                ChoiceKind::SelectOption { key } => Some(key.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(forced_keys, vec!["allowed"]);
+
+        let global_spec = choices
+            .into_iter()
+            .find(|choice| matches!(&choice.kind, ChoiceKind::SelectOption { key } if key == "global"))
+            .unwrap();
+        let mut issued = ChoiceIssuer::default().issue(vec![global_spec]);
+        let global_choice = issued.choices.remove(0);
+        let mut turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+        let mut draft = StateMap::new();
+        assert_eq!(
+            registry
+                .apply_game_choice(None, &mut turn, &mut draft, &global_choice)
+                .unwrap(),
+            Some(InteractionFlow::Continue)
+        );
+        assert_eq!(
+            draft.get("global_used").and_then(StateValue::as_bool),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn game_rule_reactions_share_the_authoritative_transaction() {
+        let mut state = sample_state();
+        let entity = EntityId::new(50);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(102),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+
+        let mut registry = RuleRegistry::new();
+        registry.register_game(EnvironmentReactionRule { entity });
+        let before = state.clone();
+        let action = RecordedAction::new("move");
+        let mut transaction = Transaction::new(&state);
+        transaction.move_entity(entity, Position::new(1, 0)).unwrap();
+        registry
+            .react_game_rules(&before, &action, &mut transaction)
+            .unwrap();
+        let outcome = transaction.finish().unwrap();
+
+        assert_eq!(
+            outcome
+                .state
+                .entity(entity)
+                .unwrap()
+                .state
+                .get("environment_hit")
+                .and_then(StateValue::as_bool),
+            Some(true)
+        );
+        assert!(state.entity(entity).unwrap().state.is_empty());
     }
 
     #[test]

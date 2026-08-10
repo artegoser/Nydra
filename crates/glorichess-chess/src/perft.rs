@@ -1,5 +1,5 @@
-use crate::{ChessError, ChessRules, ChessSide, PAWN, BISHOP, KNIGHT, QUEEN, ROOK};
-use glorichess_core::GameTimeline;
+use crate::{ChessError, ChessRules, ChessSide};
+use glorichess_core::{ChoiceInput, GameTimeline, StateMap};
 
 impl ChessRules {
     /// Counts legal leaf positions using the production move generator and
@@ -19,23 +19,26 @@ impl ChessRules {
         let mut nodes = 0_u64;
 
         for movement in moves {
-            let actor = state.entity(movement.actor)?;
-            let promotions: &[Option<glorichess_core::EntityTypeId>] =
-                if actor.entity_type == PAWN && movement.to.y == side.promotion_rank() {
-                    &[
-                        Some(QUEEN),
-                        Some(ROOK),
-                        Some(BISHOP),
-                        Some(KNIGHT),
-                    ]
-                } else {
-                    &[None]
-                };
-
-            for promotion in promotions.iter().copied() {
+            let local_choices = self.piece_move_choices(state, Some(history), movement)?;
+            let move_choices =
+                self.move_choices(state, Some(history), movement, &StateMap::new())?;
+            if !local_choices.is_empty() && move_choices.is_empty() {
+                continue;
+            }
+            if move_choices.is_empty() {
                 let mut child = timeline.clone();
                 let mut turn = child.begin_turn(side.player())?;
-                self.execute_move(&mut turn, Some(history), movement, promotion)?;
+                self.execute_move(&mut turn, Some(history), movement, None)?;
+                child.commit_turn(turn)?;
+                nodes = nodes.saturating_add(self.perft(&child, depth - 1)?);
+                continue;
+            }
+
+            for choice in move_choices {
+                let mut child = timeline.clone();
+                let mut turn = child.begin_turn(side.player())?;
+                let input = ChoiceInput::from(&choice);
+                self.execute_move(&mut turn, Some(history), movement, Some(&input))?;
                 child.commit_turn(turn)?;
                 nodes = nodes.saturating_add(self.perft(&child, depth - 1)?);
             }

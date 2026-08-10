@@ -549,11 +549,7 @@ impl From<&Choice> for ChoiceView {
                 _ => None,
             },
             option_entity_type: state_u32(&choice.data, "entity_type"),
-            asset_key: choice
-                .data
-                .get("asset_key")
-                .and_then(glorichess_core::StateValue::as_str)
-                .map(str::to_owned),
+            asset_key: choice.asset_key.clone(),
             data: choice.data.clone(),
         };
         match &choice.kind {

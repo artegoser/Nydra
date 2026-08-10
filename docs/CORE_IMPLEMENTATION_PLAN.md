@@ -717,7 +717,7 @@ Deliverables:
 
 ### Phase 1 — Generic world state
 
-Implement IDs, positions, rectangular board, players, teams, entities, owner/controller, move counts, extension state, and core invariants.
+Implement IDs, positions, rectangular board, players, teams, entities, owner/controller, extension state, and core invariants. Ruleset-specific historical facts must not become generic entity fields.
 
 No chess pieces yet.
 
@@ -794,6 +794,12 @@ Add SAN move generation and PGN import/export after legal move semantics and his
 
 Game completion is represented by core `OutcomeRule` implementations evaluated at ruleset scope, not by `EntityRule`. Entity rules may expose local semantic state that outcome rules inspect, but only the ruleset decides whether a state is terminal. `RuleRegistry` evaluates registered outcome rules in explicit registration order and returns the first `GameOutcome`. Standard chess exposes `ChessOutcomeRule` as an adapter over its existing checkmate/stalemate/draw evaluator. See [`GENERIC_OUTCOME_RULES.md`](./GENERIC_OUTCOME_RULES.md).
 
+### Generic composable game-rule architecture
+
+Use the ownership and composition model in [`GENERIC_GAME_RULES.md`](./GENERIC_GAME_RULES.md). Intrinsic entity mechanics remain on entity rules; match/variant/map/environment mechanics are independent ordered `GameRule`s. `GameRuleSet` may add top-level choices, transform/filter local choices, validate the current rule context, and handle choices introduced by a global rule. Forced local continuations receive global transforms but not unrelated global choices.
+
+Standard pawn promotion is the first production proof: `Pawn` owns the trigger, legal target types, generic continuation choices, validation, and final entity-type mutation. `ChessInteractionRules` only coordinates a pending continuation and forwards its ephemeral-free `ChoiceInput`; it does not branch on the continuation `ChoiceKind`. SAN/PGN, perft, and direct execution resolve ruleset-modified continuations through those same generated choices instead of bypassing them with a second promotion-specific execution API. Choice presentation (`label`, `asset_key`) is stored separately from semantic `ChoiceInput` data.
+
 ### Phase 16 — Architecture proof
 
 Add test-only non-chess rules that prove custom state, explicit abilities, multi-step turns, history-dependent behavior, multiple players, and control changes work without modifying core architecture.
@@ -822,6 +828,7 @@ The milestone is complete when:
 11. perft and special-rule regression suites pass;
 12. test-only custom rules prove that adding future non-chess entities/abilities does not require changing the generic core;
 13. a canonical generic action record can replay arbitrary accepted choice sequences through the same interaction runtime.
-14. terminal conditions can be supplied as generic ruleset-level outcome rules without modifying entity rules or core enums.
+14. terminal conditions can be supplied as generic ruleset-level outcome rules without modifying entity rules or core enums;
+15. intrinsic entity continuations and ruleset-wide modifiers compose through generic `ChoiceSpec`/`GameRuleSet` APIs without mechanic-specific interaction branches.
 
 Only after these conditions are met should work begin on AI/search, multiplayer authority, dynamic/user-defined pieces, procedural abilities, or additional game modes.

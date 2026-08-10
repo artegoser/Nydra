@@ -1,7 +1,7 @@
 use crate::{ChessError, ChessSide};
 use glorichess_core::{
-    EntityId, EntityPresentation, EntityRule, EntityRuleContext, EntityState, EntityTypeId,
-    GameState, History, Position, RuleError,
+    ChoiceInput, ChoiceSpec, EntityId, EntityPresentation, EntityRule, EntityRuleContext,
+    EntityState, EntityTypeId, GameState, History, Position, RuleError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -211,6 +211,43 @@ pub trait ChessPieceRule: EntityRule {
     fn pseudo_moves(&self, context: ChessPieceContext<'_>) -> Result<Vec<PseudoMove>, ChessError>;
 
     fn attacks(&self, context: ChessPieceContext<'_>) -> Result<Vec<Position>, ChessError>;
+
+    /// Piece-local continuation choices required to complete a selected move.
+    /// Core and the chess interaction coordinator treat these as opaque generic
+    /// choices; only the piece rule owns their meaning.
+    fn move_choices(
+        &self,
+        _context: ChessPieceContext<'_>,
+        _movement: &PseudoMove,
+    ) -> Result<Vec<ChoiceSpec>, ChessError> {
+        Ok(Vec::new())
+    }
+
+    /// Validate semantic move input selected from `move_choices`. Most pieces
+    /// do not need any continuation input and therefore reject any input.
+    fn validate_move_input(
+        &self,
+        context: ChessPieceContext<'_>,
+        _movement: &PseudoMove,
+        input: Option<&ChoiceInput>,
+    ) -> Result<(), ChessError> {
+        if input.is_none() {
+            Ok(())
+        } else {
+            Err(ChessError::UnexpectedMoveInput(context.entity().id))
+        }
+    }
+
+    /// Apply piece-local consequences after the geometric move has been
+    /// performed but before the turn is committed.
+    fn apply_move_input(
+        &self,
+        _state: &mut GameState,
+        _movement: &PseudoMove,
+        _input: Option<&ChoiceInput>,
+    ) -> Result<(), ChessError> {
+        Ok(())
+    }
 }
 
 pub(crate) fn offset(state: &GameState, from: Position, dx: i16, dy: i16) -> Option<Position> {

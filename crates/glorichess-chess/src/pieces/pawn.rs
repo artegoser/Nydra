@@ -1,13 +1,69 @@
 use crate::{
-    piece::{offset, standard_presentation},
-    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, PAWN,
+    piece::{offset, set_has_moved, standard_presentation},
+    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, ChessSide, PseudoMove, BISHOP,
+    KNIGHT, PAWN, QUEEN, ROOK,
 };
 use glorichess_core::{
-    EntityId, EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
-    StateChange, StateValue, TurnRecord,
+    ChoiceInput, ChoiceKind, ChoiceSpec, EntityId, EntityPresentation, EntityRule,
+    EntityRuleContext, EntityTypeId, GameState, Position, RuleError, StateChange, StateMap,
+    StateValue, TurnRecord,
 };
 
 pub struct Pawn;
+
+const PROMOTION_TARGETS: [(EntityTypeId, &str, &str); 4] = [
+    (QUEEN, "queen", "Queen"),
+    (ROOK, "rook", "Rook"),
+    (BISHOP, "bishop", "Bishop"),
+    (KNIGHT, "knight", "Knight"),
+];
+
+impl Pawn {
+    #[cfg(test)]
+    pub(crate) fn promotion_input(entity_type: EntityTypeId) -> Result<ChoiceInput, ChessError> {
+        let (_, key, _) = PROMOTION_TARGETS
+            .iter()
+            .find(|(candidate, _, _)| *candidate == entity_type)
+            .copied()
+            .ok_or(ChessError::InvalidPromotion(entity_type))?;
+        let mut data = StateMap::new();
+        data.insert("entity_type", u64::from(entity_type.get()));
+        Ok(ChoiceInput {
+            kind: ChoiceKind::SelectOption { key: key.into() },
+            data,
+        })
+    }
+
+    pub(crate) const fn is_promotion_type(entity_type: EntityTypeId) -> bool {
+        entity_type.get() == QUEEN.get()
+            || entity_type.get() == ROOK.get()
+            || entity_type.get() == BISHOP.get()
+            || entity_type.get() == KNIGHT.get()
+    }
+
+    fn promotion_type_for_key(key: &str) -> Option<EntityTypeId> {
+        PROMOTION_TARGETS
+            .iter()
+            .find(|(_, candidate_key, _)| *candidate_key == key)
+            .map(|(entity_type, _, _)| *entity_type)
+    }
+
+    fn promotion_type(input: Option<&ChoiceInput>) -> Option<EntityTypeId> {
+        input?
+            .data
+            .get("entity_type")
+            .and_then(StateValue::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .map(EntityTypeId::new)
+    }
+
+    fn is_promotion_move(
+        context: ChessPieceContext<'_>,
+        movement: &PseudoMove,
+    ) -> Result<bool, ChessError> {
+        Ok(movement.to.y == context.side()?.opponent().home_rank())
+    }
+}
 
 impl EntityRule for Pawn {
     fn presentation(
@@ -74,6 +130,79 @@ impl ChessPieceRule for Pawn {
                 )
             })
             .collect())
+    }
+
+    fn move_choices(
+        &self,
+        context: ChessPieceContext<'_>,
+        movement: &PseudoMove,
+    ) -> Result<Vec<ChoiceSpec>, ChessError> {
+        ensure_type(context, PAWN)?;
+        if !Self::is_promotion_move(context, movement)? {
+            return Ok(Vec::new());
+        }
+
+        let side_name = match context.side()? {
+            ChessSide::White => "white",
+            ChessSide::Black => "black",
+        };
+        Ok(PROMOTION_TARGETS
+            .into_iter()
+            .map(|(entity_type, key, label)| {
+                let mut choice = ChoiceSpec::option(key)
+                    .with_label(label)
+                    .with_asset_key(format!("chess/{side_name}/{key}"));
+                choice
+                    .data
+                    .insert("entity_type", u64::from(entity_type.get()));
+                choice
+            })
+            .collect())
+    }
+
+    fn validate_move_input(
+        &self,
+        context: ChessPieceContext<'_>,
+        movement: &PseudoMove,
+        input: Option<&ChoiceInput>,
+    ) -> Result<(), ChessError> {
+        ensure_type(context, PAWN)?;
+        if Self::is_promotion_move(context, movement)? {
+            let input = input.ok_or(ChessError::PromotionRequired(movement.actor))?;
+            let ChoiceKind::SelectOption { key } = &input.kind else {
+                return Err(ChessError::UnexpectedMoveInput(movement.actor));
+            };
+            let expected = Self::promotion_type_for_key(key)
+                .ok_or(ChessError::UnexpectedMoveInput(movement.actor))?;
+            let promotion = Self::promotion_type(Some(input))
+                .ok_or(ChessError::UnexpectedMoveInput(movement.actor))?;
+            if !Self::is_promotion_type(promotion) {
+                return Err(ChessError::InvalidPromotion(promotion));
+            }
+            if promotion != expected {
+                return Err(ChessError::UnexpectedMoveInput(movement.actor));
+            }
+            Ok(())
+        } else if input.is_some() {
+            Err(ChessError::UnexpectedPromotion(movement.actor))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn apply_move_input(
+        &self,
+        state: &mut GameState,
+        movement: &PseudoMove,
+        input: Option<&ChoiceInput>,
+    ) -> Result<(), ChessError> {
+        let Some(promote_to) = Self::promotion_type(input) else {
+            return Ok(());
+        };
+        let promoted = state.entity_mut(movement.actor)?;
+        promoted.entity_type = promote_to;
+        set_has_moved(promoted, true);
+        Ok(())
     }
 }
 

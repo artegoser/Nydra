@@ -1,9 +1,9 @@
 use crate::{
-    AbilityId, ChoiceSpec, CoreError, EntityId, EntityState, EntityTypeId, GameState, History,
-    PlayerId, StateMap, TeamId, Transaction, TurnSession,
+    AbilityId, Choice, ChoiceSpec, CoreError, EntityId, EntityState, EntityTypeId, GameState,
+    History, InteractionFlow, PlayerId, RecordedAction, StateMap, TeamId, Transaction, TurnSession,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -221,7 +221,10 @@ pub trait OutcomeRule {
     fn evaluate(&self, context: RuleContext<'_>) -> Result<Option<GameOutcome>, RuleError>;
 }
 
-/// Ruleset-wide hooks for constraints that do not belong to one entity.
+/// A composable ruleset-wide rule for mechanics that belong to the game/world
+/// rather than one entity or ability. Rules may add global choices and then
+/// transform the combined choice set produced by local rules. Registration
+/// order is execution order, making precedence explicit and deterministic.
 pub trait GameRule {
     fn validate(&self, _context: RuleContext<'_>) -> Result<(), RuleError> {
         Ok(())
@@ -235,6 +238,135 @@ pub trait GameRule {
     ) -> Result<Vec<ChoiceSpec>, RuleError> {
         Ok(Vec::new())
     }
+
+    fn transform_choices(
+        &self,
+        _context: RuleContext<'_>,
+        _actor: PlayerId,
+        _draft: &StateMap,
+        choices: Vec<ChoiceSpec>,
+    ) -> Result<Vec<ChoiceSpec>, RuleError> {
+        Ok(choices)
+    }
+
+    /// Optionally handle a choice introduced or intercepted by this global
+    /// rule. Returning `None` leaves the choice to another rule or the local
+    /// entity/ability interaction.
+    fn apply_choice(
+        &self,
+        _history: Option<&History>,
+        _turn: &mut TurnSession,
+        _draft: &mut StateMap,
+        _choice: &Choice,
+    ) -> Result<Option<InteractionFlow>, RuleError> {
+        Ok(None)
+    }
+
+    /// React transactionally after the local action has produced its working
+    /// state. `before` is the pre-step state; `transaction.state()` is the
+    /// current post-action state and may be further mutated through the open
+    /// transaction API. This supports terrain/environment/global reactions
+    /// without a closed universal effect enum.
+    fn react(
+        &self,
+        _before: &GameState,
+        _action: &RecordedAction,
+        _transaction: &mut Transaction,
+    ) -> Result<(), RuleError> {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct GameRuleSet {
+    rules: Vec<Arc<dyn GameRule>>,
+}
+
+impl GameRuleSet {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register<R>(&mut self, rule: R)
+    where
+        R: GameRule + 'static,
+    {
+        self.rules.push(Arc::new(rule));
+    }
+
+    pub fn validate(&self, context: RuleContext<'_>) -> Result<(), RuleError> {
+        for rule in &self.rules {
+            rule.validate(context)?;
+        }
+        Ok(())
+    }
+
+    pub fn resolve_choices(
+        &self,
+        context: RuleContext<'_>,
+        actor: PlayerId,
+        draft: &StateMap,
+        mut choices: Vec<ChoiceSpec>,
+    ) -> Result<Vec<ChoiceSpec>, RuleError> {
+        self.validate(context)?;
+        for rule in &self.rules {
+            choices.extend(rule.choices(context, actor, draft)?);
+            choices = rule.transform_choices(context, actor, draft, choices)?;
+        }
+        Ok(choices)
+    }
+
+    /// Apply only global constraints/transforms to an already-required local
+    /// continuation. This deliberately does not add unrelated top-level game
+    /// choices while a forced entity/ability continuation is pending.
+    pub fn transform_choices(
+        &self,
+        context: RuleContext<'_>,
+        actor: PlayerId,
+        draft: &StateMap,
+        mut choices: Vec<ChoiceSpec>,
+    ) -> Result<Vec<ChoiceSpec>, RuleError> {
+        self.validate(context)?;
+        for rule in &self.rules {
+            choices = rule.transform_choices(context, actor, draft, choices)?;
+        }
+        Ok(choices)
+    }
+
+    pub fn apply_choice(
+        &self,
+        history: Option<&History>,
+        turn: &mut TurnSession,
+        draft: &mut StateMap,
+        choice: &Choice,
+    ) -> Result<Option<InteractionFlow>, RuleError> {
+        for rule in &self.rules {
+            if let Some(flow) = rule.apply_choice(history, turn, draft, choice)? {
+                return Ok(Some(flow));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn react(
+        &self,
+        before: &GameState,
+        action: &RecordedAction,
+        transaction: &mut Transaction,
+    ) -> Result<(), RuleError> {
+        for rule in &self.rules {
+            rule.react(before, action, transaction)?;
+        }
+        Ok(())
+    }
+
+    pub fn len(&self) -> usize {
+        self.rules.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rules.is_empty()
+    }
 }
 
 #[derive(Default)]
@@ -242,7 +374,7 @@ pub struct RuleRegistry {
     entity_rules: BTreeMap<EntityTypeId, Box<dyn EntityRule>>,
     ability_rules: BTreeMap<AbilityId, Box<dyn AbilityRule>>,
     outcome_rules: Vec<Box<dyn OutcomeRule>>,
-    game_rule: Option<Box<dyn GameRule>>,
+    game_rules: GameRuleSet,
 }
 
 impl RuleRegistry {
@@ -320,14 +452,47 @@ impl RuleRegistry {
         self.outcome_rules.len()
     }
 
-    pub fn set_game_rule<R>(&mut self, rule: R)
+    pub fn register_game<R>(&mut self, rule: R)
     where
         R: GameRule + 'static,
     {
-        self.game_rule = Some(Box::new(rule));
+        self.game_rules.register(rule);
     }
 
-    pub fn game_rule(&self) -> Option<&dyn GameRule> {
-        self.game_rule.as_deref()
+    pub fn game_rules(&self) -> &GameRuleSet {
+        &self.game_rules
+    }
+
+    pub fn game_rule_count(&self) -> usize {
+        self.game_rules.len()
+    }
+
+    pub fn resolve_choices(
+        &self,
+        context: RuleContext<'_>,
+        actor: PlayerId,
+        draft: &StateMap,
+        choices: Vec<ChoiceSpec>,
+    ) -> Result<Vec<ChoiceSpec>, RuleError> {
+        self.game_rules.resolve_choices(context, actor, draft, choices)
+    }
+
+    pub fn apply_game_choice(
+        &self,
+        history: Option<&History>,
+        turn: &mut TurnSession,
+        draft: &mut StateMap,
+        choice: &Choice,
+    ) -> Result<Option<InteractionFlow>, RuleError> {
+        self.game_rules.apply_choice(history, turn, draft, choice)
+    }
+
+    pub fn react_game_rules(
+        &self,
+        before: &GameState,
+        action: &RecordedAction,
+        transaction: &mut Transaction,
+    ) -> Result<(), RuleError> {
+        self.game_rules.react(before, action, transaction)
     }
 }

@@ -62,6 +62,58 @@ mod tests {
         moves.iter().map(|movement| movement.to).collect()
     }
 
+    struct KnightOnlyPromotionRule;
+
+    impl glorichess_core::GameRule for KnightOnlyPromotionRule {
+        fn transform_choices(
+            &self,
+            _context: glorichess_core::RuleContext<'_>,
+            _actor: PlayerId,
+            _draft: &glorichess_core::StateMap,
+            choices: Vec<glorichess_core::ChoiceSpec>,
+        ) -> Result<Vec<glorichess_core::ChoiceSpec>, glorichess_core::RuleError> {
+            Ok(choices
+                .into_iter()
+                .filter(|choice| {
+                    if !matches!(&choice.kind, glorichess_core::ChoiceKind::SelectOption { .. }) {
+                        return true;
+                    }
+                    choice
+                        .data
+                        .get("entity_type")
+                        .and_then(glorichess_core::StateValue::as_u64)
+                        == Some(u64::from(KNIGHT.get()))
+                })
+                .collect())
+        }
+    }
+
+    struct MarkMovedEntityRule;
+
+    impl glorichess_core::GameRule for MarkMovedEntityRule {
+        fn react(
+            &self,
+            _before: &glorichess_core::GameState,
+            action: &glorichess_core::RecordedAction,
+            transaction: &mut glorichess_core::Transaction,
+        ) -> Result<(), glorichess_core::RuleError> {
+            if action.kind != "chess_move" {
+                return Ok(());
+            }
+            let Some(actor) = action
+                .data
+                .get("actor")
+                .and_then(glorichess_core::StateValue::as_u64)
+                .and_then(|value| u32::try_from(value).ok())
+                .map(EntityId::new)
+            else {
+                return Ok(());
+            };
+            transaction.entity_mut(actor)?.state.insert("game_rule_reacted", true);
+            Ok(())
+        }
+    }
+
     #[test]
     fn standard_setup_contains_all_pieces_and_players() {
         let state = standard_chess_state().unwrap();
@@ -734,6 +786,117 @@ mod tests {
     }
 
     #[test]
+    fn game_rule_can_filter_piece_owned_promotion_choices_without_redefining_pawn() {
+        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+
+        let mut rules = ChessRules::standard();
+        rules.register_game_rule(KnightOnlyPromotionRule);
+        assert_eq!(rules.game_rule_count(), 1);
+
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(0, 6));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+
+        let turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        let mut driver = InteractionDriver::new(ChessInteractionRules::new(&rules), turn).unwrap();
+        let pawn_choice = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(choice.kind, ChoiceKind::SelectEntity { entity } if entity == pawn))
+            .unwrap()
+            .id;
+        driver.choose(pawn_choice).unwrap();
+        let destination = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(0, 7)))
+            .unwrap()
+            .id;
+        driver.choose(destination).unwrap();
+
+        let options = driver
+            .interaction()
+            .choices
+            .iter()
+            .filter_map(|choice| match &choice.kind {
+                ChoiceKind::SelectOption { key } => Some(key.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(options, vec!["knight"]);
+    }
+
+    #[test]
+    fn direct_execution_cannot_bypass_game_rule_filtered_piece_input() {
+        use glorichess_core::TurnSession;
+
+        let mut rules = ChessRules::standard();
+        rules.register_game_rule(KnightOnlyPromotionRule);
+
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(0, 6));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let movement = rules
+            .legal_moves(&state, pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(0, 7))
+            .unwrap();
+
+        let queen = pieces::pawn::Pawn::promotion_input(QUEEN).unwrap();
+        let mut rejected = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        assert_eq!(
+            rules.execute_move(&mut rejected, None, movement, Some(&queen)),
+            Err(ChessError::MoveInputRejected(pawn))
+        );
+        assert!(rejected.steps.is_empty());
+        assert_eq!(rejected.working.entity(pawn).unwrap().entity_type, PAWN);
+
+        let knight = pieces::pawn::Pawn::promotion_input(KNIGHT).unwrap();
+        let mut accepted = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        rules
+            .execute_move(&mut accepted, None, movement, Some(&knight))
+            .unwrap();
+        assert_eq!(accepted.working.entity(pawn).unwrap().entity_type, KNIGHT);
+    }
+
+    #[test]
+    fn chess_execution_runs_registered_game_rule_reactions_in_same_transaction() {
+        use glorichess_core::TurnSession;
+
+        let mut rules = ChessRules::standard();
+        rules.register_game_rule(MarkMovedEntityRule);
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let knight = add_piece(&mut state, 2, KNIGHT, ChessSide::White, Position::new(1, 0));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let movement = rules
+            .legal_moves(&state, knight)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(2, 2))
+            .unwrap();
+        let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+
+        rules.execute_move(&mut turn, None, movement, None).unwrap();
+
+        assert_eq!(
+            turn.working
+                .entity(knight)
+                .unwrap()
+                .state
+                .get("game_rule_reacted")
+                .and_then(glorichess_core::StateValue::as_bool),
+            Some(true)
+        );
+        assert!(state.entity(knight).unwrap().state.is_empty());
+    }
+
+    #[test]
     fn capture_promotion_removes_the_target_and_changes_type() {
         use glorichess_core::TurnSession;
 
@@ -750,7 +913,8 @@ mod tests {
             .find(|movement| movement.to == Position::new(2, 7))
             .unwrap();
         let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
-        rules.execute_move(&mut turn, None, movement, Some(BISHOP)).unwrap();
+        let input = pieces::pawn::Pawn::promotion_input(BISHOP).unwrap();
+        rules.execute_move(&mut turn, None, movement, Some(&input)).unwrap();
         assert!(!turn.working.entities.contains_key(&victim));
         assert_eq!(turn.working.entity(pawn).unwrap().entity_type, BISHOP);
     }

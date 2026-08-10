@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{ChessRules, ChessSide, BISHOP, KNIGHT, PAWN, QUEEN, ROOK, WHITE_PLAYER};
+    use crate::{pieces::pawn::Pawn, ChessRules, ChessSide, BISHOP, KNIGHT, PAWN, QUEEN, ROOK, WHITE_PLAYER};
     use glorichess_core::{Position, TurnSession};
 
     #[test]
@@ -20,12 +20,13 @@ mod tests {
                 .find(|movement| movement.to == Position::new(0, 7))
                 .unwrap();
             let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+            let input = Pawn::promotion_input(promotion).unwrap();
             rules
                 .execute_move(
                     &mut turn,
                     Some(imported.timeline.history()),
                     movement,
-                    Some(promotion),
+                    Some(&input),
                 )
                 .unwrap();
             let promoted = turn.working.entity(pawn).unwrap();

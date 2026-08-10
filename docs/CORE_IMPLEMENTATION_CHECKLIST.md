@@ -485,6 +485,31 @@ Reference: [`GENERIC_OUTCOME_RULES.md`](./GENERIC_OUTCOME_RULES.md).
 - [x] Adapt standard chess outcomes through `ChessOutcomeRule`.
 - [x] Prove chess checkmate maps to the generic outcome contract.
 
+## Generic composable game rules
+
+Reference: [`GENERIC_GAME_RULES.md`](./GENERIC_GAME_RULES.md).
+
+- [x] Replace the single optional core `GameRule` slot with ordered composable `GameRuleSet`.
+- [x] Allow game rules to add top-level generic choices.
+- [x] Allow game rules to transform/filter combined generic choices in deterministic registration order.
+- [x] Apply only transforms, not unrelated global actions, during forced local continuations.
+- [x] Allow a game rule to handle a choice it introduced or intercepted.
+- [x] Run game-rule validation before choice resolution and authoritative chess move execution.
+- [x] Move standard promotion trigger and target generation into `Pawn`.
+- [x] Remove pawn/promotion/type branches from `ChessInteractionRules`.
+- [x] Pass selected move continuation semantics opaquely through `ChoiceInput` (`ChoiceKind` + `StateMap`) without `ChoiceId`, labels, or presentation asset keys.
+- [x] Separate choice presentation (`label`, `asset_key`) from semantic choice data before canonical replay recording.
+- [x] Route any pending move continuation `ChoiceKind` through the same generic `ChoiceInput` path rather than hardcoding `SelectOption`.
+- [x] Let `Pawn` validate promotion input and perform the entity-type mutation.
+- [x] Remove promotion-specific data from the recorded `chess_move` action; derive SAN promotion from before/after state.
+- [x] Make perft enumerate generated move continuations rather than hardcoding four promotion branches.
+- [x] Make SAN/PGN resolve promotions through currently allowed generated move continuations.
+- [x] Add a test proving a `GameRule` can filter pawn-owned promotion choices without redefining `Pawn`.
+- [x] Prove direct authoritative execution cannot bypass a game-rule-filtered piece continuation.
+- [x] Add core tests proving ordered global choice augmentation/filtering and global choice handling.
+- [x] Add a generic transactional post-step reaction hook for terrain/environment mechanics without introducing a closed effect enum.
+- [x] Prove chess execution runs registered game-rule reactions inside the same authoritative transaction.
+
 ## Phase 16 — Architecture proof
 
 Create internal/test-only non-chess rules. Do not expose them as a product mode yet.
@@ -508,7 +533,8 @@ Create internal/test-only non-chess rules. Do not expose them as a product mode 
 
 Reference: [`GENERIC_ACTION_NOTATION.md`](./GENERIC_ACTION_NOTATION.md).
 
-- [ ] Add a canonical `RecordedChoice` representation that excludes ephemeral `ChoiceId` and presentation labels.
+- [x] Add canonical ephemeral-free `ChoiceInput` (`ChoiceKind` + data), excluding `ChoiceId`, labels, and presentation asset keys.
+- [ ] Persist accepted `ChoiceInput` values in turn history for generic action notation/replay.
 - [ ] Enforce that `(ChoiceKind, data)` is unique within one generated `Interaction`.
 - [ ] Record the ordered accepted decision trace for every committed non-synthetic turn.
 - [ ] Keep transient/cancelled draft choices out of the committed decision trace.

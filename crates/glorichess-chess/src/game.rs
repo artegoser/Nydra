@@ -4,8 +4,9 @@ use crate::{
     PAWN, QUEEN, ROOK,
 };
 use glorichess_core::{
-    EntityId, EntityPresentation, EntityState, EntityTypeId, GameState, History, PlayerId,
-    PlayerState, Position, RecordedAction, RuleContext, StateMap, TeamId, TeamState, TurnSession,
+    Choice, ChoiceInput, ChoiceSpec, EntityId, EntityPresentation, EntityState, EntityTypeId, GameRule,
+    GameRuleSet, GameState, History, InteractionFlow, PlayerId, PlayerState, Position,
+    RecordedAction, RuleContext, StateMap, TeamId, TeamState, TurnSession,
 };
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -67,12 +68,6 @@ impl ChessSide {
         }
     }
 
-    pub const fn promotion_rank(self) -> u16 {
-        match self {
-            Self::White => 7,
-            Self::Black => 0,
-        }
-    }
 }
 
 pub fn empty_chess_state() -> Result<GameState, ChessError> {
@@ -149,12 +144,14 @@ fn add_piece(
 #[derive(Clone)]
 pub struct ChessRules {
     pieces: BTreeMap<EntityTypeId, Arc<dyn ChessPieceRule>>,
+    game_rules: GameRuleSet,
 }
 
 impl ChessRules {
     pub fn standard() -> Self {
         let mut rules = Self {
             pieces: BTreeMap::new(),
+            game_rules: GameRuleSet::new(),
         };
         rules.register(Pawn).expect("pawn type is unique");
         rules.register(Knight).expect("knight type is unique");
@@ -167,6 +164,17 @@ impl ChessRules {
 
     pub fn outcome_rule(&self) -> crate::ChessOutcomeRule {
         crate::ChessOutcomeRule::new(self.clone())
+    }
+
+    pub fn register_game_rule<R>(&mut self, rule: R)
+    where
+        R: GameRule + 'static,
+    {
+        self.game_rules.register(rule);
+    }
+
+    pub fn game_rule_count(&self) -> usize {
+        self.game_rules.len()
     }
 
     pub fn register<R>(&mut self, rule: R) -> Result<(), ChessError>
@@ -198,6 +206,58 @@ impl ChessRules {
         Ok(self
             .piece_rule(context.entity().entity_type)?
             .presentation(context)?)
+    }
+
+    pub(crate) fn piece_move_choices(
+        &self,
+        state: &GameState,
+        history: Option<&History>,
+        movement: PseudoMove,
+    ) -> Result<Vec<ChoiceSpec>, ChessError> {
+        let context = ChessPieceContext::with_history(state, history, movement.actor)?;
+        self.piece_rule(context.entity().entity_type)?
+            .move_choices(context, &movement)
+    }
+
+    pub fn move_choices(
+        &self,
+        state: &GameState,
+        history: Option<&History>,
+        movement: PseudoMove,
+        draft: &StateMap,
+    ) -> Result<Vec<ChoiceSpec>, ChessError> {
+        let actor = state.entity(movement.actor)?.controller;
+        let choices = self.piece_move_choices(state, history, movement)?;
+        Ok(self.game_rules.transform_choices(
+            RuleContext::from_state(state, history),
+            actor,
+            draft,
+            choices,
+        )?)
+    }
+
+    pub fn resolve_game_choices(
+        &self,
+        context: RuleContext<'_>,
+        actor: PlayerId,
+        draft: &StateMap,
+        choices: Vec<ChoiceSpec>,
+    ) -> Result<Vec<ChoiceSpec>, ChessError> {
+        Ok(self
+            .game_rules
+            .resolve_choices(context, actor, draft, choices)?)
+    }
+
+    pub fn apply_game_choice(
+        &self,
+        history: Option<&History>,
+        turn: &mut TurnSession,
+        draft: &mut StateMap,
+        choice: &Choice,
+    ) -> Result<Option<InteractionFlow>, ChessError> {
+        Ok(self
+            .game_rules
+            .apply_choice(history, turn, draft, choice)?)
     }
 
     pub fn pseudo_moves(
@@ -297,7 +357,7 @@ impl ChessRules {
             }
 
             let mut candidate = state.clone();
-            self.apply_move_unchecked(&mut candidate, &movement, None, false)?;
+            self.apply_move_unchecked(&mut candidate, &movement)?;
             if !self.in_check(&candidate, side)? {
                 legal.push(movement);
             }
@@ -336,8 +396,10 @@ impl ChessRules {
         turn: &mut TurnSession,
         history: Option<&History>,
         movement: PseudoMove,
-        promotion: Option<EntityTypeId>,
+        input: Option<&ChoiceInput>,
     ) -> Result<(), ChessError> {
+        self.game_rules
+            .validate(RuleContext::from_turn(turn, history))?;
         let empty_history = History::default();
         let status_history = history.unwrap_or(&empty_history);
         if self.status(&turn.working, status_history)?.outcome.is_some() {
@@ -345,21 +407,33 @@ impl ChessRules {
         }
         let actor = turn.working.entity(movement.actor)?;
         let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
+        let actor_type = actor.entity_type;
+        let is_capture = movement.capture.is_some();
+        let piece_context = ChessPieceContext::with_history(&turn.working, history, movement.actor)?;
+        let piece_rule = self.piece_rule(actor_type)?;
         let legal = self.legal_moves_with_history(&turn.working, history, movement.actor)?;
         if !legal.contains(&movement) {
             return Err(ChessError::IllegalMove(movement.actor, movement.to));
         }
-
-        let promotion_required = actor.entity_type == PAWN && movement.to.y == side.promotion_rank();
-        if promotion_required {
-            let Some(kind) = promotion else {
-                return Err(ChessError::PromotionRequired(movement.actor));
-            };
-            if !Self::is_promotion_type(kind) {
-                return Err(ChessError::InvalidPromotion(kind));
+        let local_choices = piece_rule.move_choices(piece_context, &movement)?;
+        let allowed_inputs = self.game_rules.transform_choices(
+            RuleContext::from_turn(turn, history),
+            actor.controller,
+            &StateMap::new(),
+            local_choices.clone(),
+        )?;
+        if !local_choices.is_empty() && allowed_inputs.is_empty() {
+            return Err(ChessError::MoveInputRejected(movement.actor));
+        }
+        piece_rule.validate_move_input(piece_context, &movement, input)?;
+        if let Some(input) = input {
+            if !allowed_inputs
+                .iter()
+                .map(ChoiceInput::from)
+                .any(|candidate| candidate == *input)
+            {
+                return Err(ChessError::MoveInputRejected(movement.actor));
             }
-        } else if promotion.is_some() {
-            return Err(ChessError::UnexpectedPromotion(movement.actor));
         }
 
         let mut action_data = StateMap::new();
@@ -368,40 +442,37 @@ impl ChessRules {
         action_data.insert("from_y", u64::from(movement.from.y));
         action_data.insert("to_x", u64::from(movement.to.x));
         action_data.insert("to_y", u64::from(movement.to.y));
-        if let Some(kind) = promotion {
-            action_data.insert("promotion", u64::from(kind.get()));
-        }
 
-        turn.apply_transaction(
-            RecordedAction {
-                kind: "chess_move".into(),
-                data: action_data,
-            },
-            |transaction| {
-                self.apply_move_unchecked(transaction.raw_state_mut(), &movement, promotion, true)
-            },
-        )?;
+        let action = RecordedAction {
+            kind: "chess_move".into(),
+            data: action_data,
+        };
+        let before = turn.working.clone();
+        turn.apply_transaction(action.clone(), |transaction| {
+            {
+                let state = transaction.raw_state_mut();
+                self.apply_move_unchecked(state, &movement)?;
+                piece_rule.apply_move_input(state, &movement, input)?;
+                self.update_halfmove_clock_for_move(state, actor_type, is_capture);
+                if side == ChessSide::Black {
+                    let next_fullmove = self.fullmove_number(state).saturating_add(1);
+                    self.set_fullmove_number(state, next_fullmove);
+                }
+                state.set_active_players(vec![side.opponent().player()])?;
+            }
+            self.game_rules.react(&before, &action, transaction)?;
+            Ok(())
+        })?;
         Ok(())
-    }
-
-    pub const fn is_promotion_type(entity_type: EntityTypeId) -> bool {
-        entity_type.get() == QUEEN.get()
-            || entity_type.get() == ROOK.get()
-            || entity_type.get() == BISHOP.get()
-            || entity_type.get() == KNIGHT.get()
     }
 
     pub(crate) fn apply_move_unchecked(
         &self,
         state: &mut GameState,
         movement: &PseudoMove,
-        promotion: Option<EntityTypeId>,
-        advance_turn: bool,
     ) -> Result<(), ChessError> {
         let actor = state.entity(movement.actor)?;
-        let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
         let actor_type = actor.entity_type;
-        let is_capture = movement.capture.is_some();
         if actor.position != movement.from {
             return Err(ChessError::StaleMove(movement.actor));
         }
@@ -426,19 +497,6 @@ impl ChessRules {
 
         if actor_type == KING || actor_type == ROOK {
             set_has_moved(state.entity_mut(movement.actor)?, true);
-        }
-        if let Some(promote_to) = promotion {
-            let promoted = state.entity_mut(movement.actor)?;
-            promoted.entity_type = promote_to;
-            set_has_moved(promoted, true);
-        }
-        if advance_turn {
-            self.update_halfmove_clock_for_move(state, actor_type, is_capture);
-            if side == ChessSide::Black {
-                let next_fullmove = self.fullmove_number(state).saturating_add(1);
-                self.set_fullmove_number(state, next_fullmove);
-            }
-            state.set_active_players(vec![side.opponent().player()])?;
         }
         Ok(())
     }
