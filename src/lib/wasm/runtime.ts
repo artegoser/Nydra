@@ -90,6 +90,9 @@ export interface TransitionView {
 export interface HistoryTurnView {
 	index: number;
 	actor: number;
+	move_number: number;
+	side: 'white' | 'black';
+	san: string;
 	actions: Array<{ kind: string; data: unknown }>;
 }
 
@@ -101,6 +104,7 @@ interface WasmHandle {
 	undo(): TransitionView;
 	redo(): TransitionView;
 	fen(): string;
+	pgn(): string;
 	history(): HistoryTurnView[];
 	canUndo(): boolean;
 	canRedo(): boolean;
@@ -111,6 +115,7 @@ interface WasmModule {
 	default(): Promise<unknown>;
 	new_chess(): WasmHandle;
 	from_fen(fen: string): WasmHandle;
+	from_pgn(pgn: string): WasmHandle;
 }
 
 let modulePromise: Promise<WasmModule> | null = null;
@@ -135,6 +140,11 @@ export class LocalChessGame {
 	static async fromFen(fen: string): Promise<LocalChessGame> {
 		const wasm = await loadModule();
 		return new LocalChessGame(wasm.from_fen(fen));
+	}
+
+	static async fromPgn(pgn: string): Promise<LocalChessGame> {
+		const wasm = await loadModule();
+		return new LocalChessGame(wasm.from_pgn(pgn));
 	}
 
 	view(): GameView {
@@ -163,6 +173,10 @@ export class LocalChessGame {
 
 	fen(): string {
 		return this.handle.fen();
+	}
+
+	pgn(): string {
+		return this.handle.pgn();
 	}
 
 	history(): HistoryTurnView[] {

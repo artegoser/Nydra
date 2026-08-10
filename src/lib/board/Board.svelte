@@ -24,6 +24,8 @@
 	let history: HistoryTurnView[] = [];
 	let currentFen = '';
 	let fenDraft = '';
+	let currentPgn = '';
+	let pgnDraft = '';
 	let orientation: 'white' | 'black' = 'white';
 	let error: string | null = null;
 	let loading = true;
@@ -32,6 +34,7 @@
 		if (!runtime) return;
 		history = runtime.history();
 		currentFen = runtime.fen();
+		currentPgn = runtime.pgn();
 		if (!fenDraft) fenDraft = currentFen;
 	}
 
@@ -82,7 +85,9 @@
 		interaction = next.interaction();
 		history = next.history();
 		currentFen = next.fen();
+		currentPgn = next.pgn();
 		fenDraft = currentFen;
+		pgnDraft = currentPgn;
 		error = null;
 		loading = false;
 		old?.dispose();
@@ -114,6 +119,25 @@
 			await navigator.clipboard.writeText(currentFen);
 		} catch {
 			// Clipboard availability is browser-dependent; the field remains selectable.
+		}
+	}
+
+	async function loadPgn() {
+		try {
+			loading = true;
+			await installRuntime(await LocalChessGame.fromPgn(pgnDraft.trim()));
+		} catch (cause) {
+			loading = false;
+			error = cause instanceof Error ? cause.message : String(cause);
+		}
+	}
+
+	async function copyPgn() {
+		if (!currentPgn || typeof navigator === 'undefined') return;
+		try {
+			await navigator.clipboard.writeText(currentPgn);
+		} catch {
+			// The textarea remains selectable if clipboard permission is unavailable.
 		}
 	}
 
@@ -196,11 +220,23 @@
 					<p class="panel-muted">No moves yet.</p>
 				{:else}
 					<ol>
-						{#each history as turn, index}
-							<li><span>{index + 1}.</span> {turn.actions.map((action) => action.kind).join(', ')}</li>
+						{#each history as turn}
+							<li><span>{turn.move_number}{turn.side === 'black' ? '...' : '.'}</span> {turn.san}</li>
 						{/each}
 					</ol>
 				{/if}
+			</section>
+
+			<section class="pgn-panel">
+				<div class="panel-heading-row">
+					<h2>PGN</h2>
+					<button type="button" on:click={copyPgn}>Copy</button>
+				</div>
+				<textarea readonly value={currentPgn} rows="9" aria-label="Current PGN"></textarea>
+				<form on:submit|preventDefault={loadPgn} class="pgn-loader">
+					<textarea bind:value={pgnDraft} rows="6" spellcheck="false" aria-label="Load PGN"></textarea>
+					<button type="submit">Load PGN</button>
+				</form>
 			</section>
 		</aside>
 	</div>

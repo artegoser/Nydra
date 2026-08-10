@@ -5,6 +5,12 @@ use thiserror::Error;
 pub enum ChessError {
     #[error("invalid FEN: {0}")]
     InvalidFen(String),
+    #[error("invalid SAN: {0}")]
+    InvalidSan(String),
+    #[error("ambiguous SAN: {0}")]
+    AmbiguousSan(String),
+    #[error("invalid PGN: {0}")]
+    InvalidPgn(String),
     #[error(transparent)]
     Core(#[from] CoreError),
     #[error(transparent)]

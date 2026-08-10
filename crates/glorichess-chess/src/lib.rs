@@ -7,18 +7,20 @@ mod error;
 mod fen;
 mod game;
 mod interaction;
+mod notation;
 mod outcome;
 mod perft;
 mod piece;
 mod pieces;
 
 pub use error::ChessError;
-pub use fen::FenGame;
+pub use fen::{FenGame, STANDARD_FEN};
 pub use game::{
     empty_chess_state, standard_chess_state, ChessRules, BLACK_PLAYER, BLACK_TEAM, WHITE_PLAYER,
     WHITE_TEAM,
 };
 pub use interaction::ChessInteractionRules;
+pub use notation::PgnGame;
 pub use outcome::{ChessDrawClaim, ChessOutcome, ChessStatus, PositionKey};
 pub use piece::{
     ChessMoveKind, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP, KING, KNIGHT, PAWN,

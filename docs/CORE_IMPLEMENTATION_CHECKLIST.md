@@ -455,15 +455,15 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 
 ## Phase 15 — SAN and PGN
 
-- [ ] Generate SAN for ordinary moves.
-- [ ] Generate SAN captures.
-- [ ] Generate SAN disambiguation.
-- [ ] Generate SAN castling.
-- [ ] Generate SAN promotions.
-- [ ] Generate SAN check/checkmate suffixes.
-- [ ] Export PGN from game history.
-- [ ] Import standard PGN main line.
-- [ ] Test PGN/FEN interoperability where applicable.
+- [x] Generate SAN for ordinary moves.
+- [x] Generate SAN captures.
+- [x] Generate SAN disambiguation.
+- [x] Generate SAN castling.
+- [x] Generate SAN promotions.
+- [x] Generate SAN check/checkmate suffixes.
+- [x] Export PGN from game history.
+- [x] Import standard PGN main line.
+- [x] Test PGN/FEN interoperability where applicable.
 
 ## Phase 16 — Architecture proof
 

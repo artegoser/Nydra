@@ -1,6 +1,8 @@
 use crate::{
     ChessError, ChessRules, ChessSide, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
 };
+pub const STANDARD_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
 use glorichess_core::{EntityId, EntityState, EntityTypeId, GameState, GameTimeline, History, Position};
 
 pub struct FenGame {

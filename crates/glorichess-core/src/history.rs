@@ -84,6 +84,20 @@ impl History {
             .and_then(|state| state.entities.get(&entity))
     }
 
+    /// Returns a cloned history with one contiguous committed turn appended.
+    /// Useful for rules that need to evaluate the immediate consequences of a
+    /// candidate completed turn without mutating the real game timeline.
+    pub fn with_appended(&self, turn: TurnRecord) -> Result<Self, CoreError> {
+        if let Some(previous) = self.turns.last() {
+            if previous.after != turn.before {
+                return Err(CoreError::TurnStateMismatch);
+            }
+        }
+        let mut next = self.clone();
+        next.turns.push(turn);
+        Ok(next)
+    }
+
     fn push(&mut self, turn: TurnRecord) {
         self.turns.push(turn);
     }

@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 
 use glorichess_chess::{
-    standard_chess_state, ChessInteractionRules, ChessOutcome, ChessRules, ChessSide,
+    standard_chess_state, ChessInteractionRules, ChessOutcome, ChessRules, ChessSide, STANDARD_FEN,
 };
 use glorichess_core::{
     Choice, ChoiceId, ChoiceKind, EntityState, GameState, GameTimeline, InteractionDriver,
@@ -28,11 +28,17 @@ pub fn from_fen(fen: &str) -> Result<GameHandle, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn from_pgn(pgn: &str) -> Result<GameHandle, JsValue> {
+    GameHandle::new_from_pgn(pgn).map_err(js_error)
+}
+
+#[wasm_bindgen]
 pub struct GameHandle {
     rules: ChessRules,
     timeline: GameTimeline,
     interaction: Option<InteractionDriver<ChessInteractionRules>>,
     undo_floor: usize,
+    initial_fen: String,
 }
 
 impl GameHandle {
@@ -45,6 +51,7 @@ impl GameHandle {
             timeline,
             interaction: None,
             undo_floor: 0,
+            initial_fen: STANDARD_FEN.to_owned(),
         };
         game.rebuild_interaction()?;
         Ok(game)
@@ -53,11 +60,36 @@ impl GameHandle {
     fn new_from_fen(fen: &str) -> Result<Self, String> {
         let rules = ChessRules::standard();
         let imported = rules.from_fen(fen).map_err(string_error)?;
+        let initial_fen = rules
+            .to_fen(imported.timeline.current(), imported.timeline.history())
+            .map_err(string_error)?;
         let mut game = Self {
             rules,
             timeline: imported.timeline,
             interaction: None,
             undo_floor: imported.synthetic_history_len,
+            initial_fen,
+        };
+        game.rebuild_interaction()?;
+        Ok(game)
+    }
+
+    fn new_from_pgn(pgn: &str) -> Result<Self, String> {
+        let rules = ChessRules::standard();
+        let imported = rules.from_pgn(pgn).map_err(string_error)?;
+        let undo_floor = imported
+            .timeline
+            .history()
+            .turns()
+            .iter()
+            .take_while(|turn| turn.synthetic)
+            .count();
+        let mut game = Self {
+            rules,
+            timeline: imported.timeline,
+            interaction: None,
+            undo_floor,
+            initial_fen: imported.initial_fen,
         };
         game.rebuild_interaction()?;
         Ok(game)
@@ -214,17 +246,29 @@ impl GameHandle {
             .map_err(js_error)
     }
 
+    pub fn pgn(&self) -> Result<String, JsValue> {
+        self.rules
+            .to_pgn(&self.initial_fen, self.timeline.history())
+            .map_err(js_error)
+    }
+
     pub fn history(&self) -> Result<JsValue, JsValue> {
-        let turns = self
-            .timeline
-            .history()
-            .turns()
-            .iter()
-            .enumerate()
-            .filter(|(_, turn)| !turn.synthetic)
-            .map(|(index, turn)| HistoryTurnView {
+        let mut prefix = glorichess_core::History::default();
+        let mut turns = Vec::new();
+        for (index, turn) in self.timeline.history().turns().iter().enumerate() {
+            if turn.synthetic {
+                prefix = prefix.with_appended(turn.clone()).map_err(js_error)?;
+                continue;
+            }
+            let side = ChessSide::from_player(turn.actor)
+                .ok_or_else(|| js_error("history actor is not a chess side"))?;
+            let san = self.rules.san_for_turn(turn, &prefix).map_err(js_error)?;
+            turns.push(HistoryTurnView {
                 index: u32::try_from(index).unwrap_or(u32::MAX),
                 actor: turn.actor.get(),
+                move_number: self.rules.fullmove_number(&turn.before),
+                side: side_name(side).to_owned(),
+                san,
                 actions: turn
                     .steps
                     .iter()
@@ -233,8 +277,9 @@ impl GameHandle {
                         data: step.action.data.clone(),
                     })
                     .collect(),
-            })
-            .collect::<Vec<_>>();
+            });
+            prefix = prefix.with_appended(turn.clone()).map_err(js_error)?;
+        }
         to_js(&turns)
     }
 
@@ -768,6 +813,9 @@ pub struct ActionView {
 pub struct HistoryTurnView {
     pub index: u32,
     pub actor: u32,
+    pub move_number: u32,
+    pub side: String,
+    pub san: String,
     pub actions: Vec<ActionView>,
 }
 
@@ -819,5 +867,31 @@ mod tests {
         assert!(!game.can_undo_internal());
         assert_eq!(game.timeline.history().len(), 1);
         assert!(game.timeline.history().previous_turn().unwrap().synthetic);
+    }
+
+    #[test]
+    fn pgn_runtime_rebuilds_authoritative_timeline() {
+        let game = GameHandle::new_from_pgn("1. e4 e5 2. Nf3 Nc6 *").unwrap();
+        assert_eq!(
+            game.timeline
+                .history()
+                .turns()
+                .iter()
+                .filter(|turn| !turn.synthetic)
+                .count(),
+            4
+        );
+        assert_eq!(game.initial_fen, STANDARD_FEN);
+        assert_eq!(
+            game.rules
+                .to_fen(game.timeline.current(), game.timeline.history())
+                .unwrap(),
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+        );
+        assert!(game
+            .rules
+            .to_pgn(&game.initial_fen, game.timeline.history())
+            .unwrap()
+            .contains("1. e4 e5 2. Nf3 Nc6 *"));
     }
 }

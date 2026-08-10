@@ -427,3 +427,26 @@ textarea {
 		max-height: none;
 	}
 }
+
+.panel-heading-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-bottom: 0.7rem;
+}
+
+.panel-heading-row h2 {
+	margin: 0;
+}
+
+.pgn-panel textarea {
+	resize: vertical;
+	line-height: 1.35;
+}
+
+.pgn-loader {
+	display: grid;
+	gap: 0.5rem;
+	margin-top: 0.6rem;
+}
