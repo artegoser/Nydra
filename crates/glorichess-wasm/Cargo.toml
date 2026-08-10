@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Browser WebAssembly facade for the GloriChess game runtime."
 
 [lib]
 crate-type = ["cdylib", "rlib"]
