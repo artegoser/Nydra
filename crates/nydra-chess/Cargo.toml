@@ -1,5 +1,5 @@
 [package]
-name = "glorichess-core"
+name = "nydra-chess"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,5 +7,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+nydra-core.workspace = true
 serde.workspace = true
 thiserror.workspace = true

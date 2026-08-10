@@ -1,5 +1,5 @@
 use crate::{ChessError, ChessRules, ChessSide};
-use glorichess_core::{ChoiceInput, GameTimeline, StateMap};
+use nydra_core::{ChoiceInput, GameTimeline, StateMap};
 
 impl ChessRules {
     /// Counts legal leaf positions using the production move generator and

@@ -2,7 +2,7 @@ use crate::{
     piece::{has_moved, leaper_attacks, leaper_moves, standard_presentation},
     ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, ChessRules, PseudoMove, KING, ROOK,
 };
-use glorichess_core::{
+use nydra_core::{
     EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
 };
 

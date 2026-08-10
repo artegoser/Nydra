@@ -1,10 +1,10 @@
-# GloriChess Rust Core Implementation Checklist
+# Nydra Rust Core Implementation Checklist
 
 This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.md`.
 
 ## Architectural invariants
 
-- [x] `glorichess-core` contains no chess-specific piece/rule concepts.
+- [x] `nydra-core` contains no chess-specific piece/rule concepts.
 - [x] Core player identity uses `PlayerId`, not white/black.
 - [x] Core supports `TeamId` independently from `PlayerId`.
 - [x] Entities have distinct `owner` and `controller` fields.
@@ -26,9 +26,9 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 ## Phase 0 — Repository preparation
 
 - [x] Add root `Cargo.toml` workspace.
-- [x] Add `crates/glorichess-core`.
-- [x] Add `crates/glorichess-chess`.
-- [x] Add `crates/glorichess-wasm`.
+- [x] Add `crates/nydra-core`.
+- [x] Add `crates/nydra-chess`.
+- [x] Add `crates/nydra-wasm`.
 - [x] Define workspace dependency/version policy.
 - [x] Add Rust formatting/lint/test commands.
 - [x] Add WASM browser build integration skeleton.
@@ -127,7 +127,7 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ### Chess setup
 
-- [x] Define `ChessSide` in `glorichess-chess` only.
+- [x] Define `ChessSide` in `nydra-chess` only.
 - [x] Map `ChessSide::White` to a concrete `PlayerId`.
 - [x] Map `ChessSide::Black` to a concrete `PlayerId`.
 - [x] Create standard 8×8 chess board setup.
@@ -304,7 +304,7 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 13 — Lichess-parity interactive local chess UI
 
-Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target is the standard Lichess board interaction experience, implemented independently in GloriChess with Rust/WASM remaining authoritative.
+Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target is the standard Lichess board interaction experience, implemented independently in Nydra with Rust/WASM remaining authoritative.
 
 ### Authority boundary
 
@@ -391,7 +391,7 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [x] Match the default Lichess brown-board visual relationship closely.
 - [x] Match Lichess-like piece scale/alignment within squares.
 - [x] Keep subtle rounded outer board corners, clip overlays/pieces consistently, and avoid clipping coordinate labels.
-- [x] Remove current GloriChess-only destination marker styling that visibly differs from Lichess.
+- [x] Remove current Nydra-only destination marker styling that visibly differs from Lichess.
 - [x] Remove/adjust current board-only styling that visibly prevents side-by-side Lichess parity.
 - [x] Do not add any Lichess/Chessground runtime dependency.
 - [x] Do not copy upstream source/CSS verbatim; independently recreate the behavior/rendered result.
@@ -514,7 +514,7 @@ Reference: [`GENERIC_GAME_RULES.md`](./GENERIC_GAME_RULES.md).
 
 Create internal/test-only non-chess rules. Do not expose them as a product mode yet.
 
-- [ ] Register a test custom entity type without editing `glorichess-core`.
+- [ ] Register a test custom entity type without editing `nydra-core`.
 - [ ] Give the entity custom state such as HP/mana.
 - [ ] Expose an explicit named ability choice.
 - [ ] Mutate another entity's custom state.

@@ -1,4 +1,4 @@
-# GloriChess Rust Core Implementation Plan
+# Nydra Rust Core Implementation Plan
 
 ## 1. Goal
 
@@ -34,7 +34,7 @@ These rules are constraints for the implementation, not suggestions.
 
 ### 2.1 The generic core contains no chess rules
 
-`glorichess-core` must not contain concepts such as:
+`nydra-core` must not contain concepts such as:
 
 - pawn, knight, bishop, rook, queen, king;
 - white/black as player identities;
@@ -44,7 +44,7 @@ These rules are constraints for the implementation, not suggestions.
 - promotion;
 - FEN/PGN/SAN.
 
-Those belong to `glorichess-chess`.
+Those belong to `nydra-chess`.
 
 ### 2.2 Players are IDs, not colors
 
@@ -232,14 +232,14 @@ Do not infer attacks from final legal moves.
 Target layout:
 
 ```text
-glorichess/
+nydra/
 ├── Cargo.toml
 ├── crates/
-│   ├── glorichess-core/
+│   ├── nydra-core/
 │   │   └── src/
-│   ├── glorichess-chess/
+│   ├── nydra-chess/
 │   │   └── src/
-│   └── glorichess-wasm/
+│   └── nydra-wasm/
 │       └── src/
 ├── docs/
 │   ├── CORE_IMPLEMENTATION_PLAN.md
@@ -252,7 +252,7 @@ glorichess/
 
 Suggested ownership:
 
-### `glorichess-core`
+### `nydra-core`
 
 - IDs and stable handles;
 - board/grid primitives;
@@ -269,7 +269,7 @@ Suggested ownership:
 - optional presentation cues;
 - generic ruleset/entity/ability interfaces.
 
-### `glorichess-chess`
+### `nydra-chess`
 
 - chess sides and side-to-player mapping;
 - standard initial position;
@@ -285,7 +285,7 @@ Suggested ownership:
 - FEN;
 - later SAN/PGN.
 
-### `glorichess-wasm`
+### `nydra-wasm`
 
 - browser-facing `GameHandle`;
 - DTO conversion;
@@ -687,7 +687,7 @@ Add established special-rule perft positions covering castling, en passant, chec
 
 Do not ship another game mode yet. Add internal test-only rules proving the generic runtime is not secretly chess-only.
 
-At minimum prove that without changing `glorichess-core` one can define a test entity/ruleset that:
+At minimum prove that without changing `nydra-core` one can define a test entity/ruleset that:
 
 - owns custom entity state;
 - mutates another entity's state;
@@ -709,9 +709,9 @@ Introduce the Rust workspace alongside the current Svelte application without ch
 Deliverables:
 
 - root Cargo workspace;
-- `glorichess-core`;
-- `glorichess-chess`;
-- `glorichess-wasm`;
+- `nydra-core`;
+- `nydra-chess`;
+- `nydra-wasm`;
 - browser build integration skeleton;
 - documented development commands.
 
@@ -776,7 +776,7 @@ Replace TypeScript piece/FEN/game-state authority with the WASM game handle whil
 
 ### Phase 13 — Lichess-parity interactive local chess UI
 
-Replace the temporary click-only board interaction layer with a first-class board UX that matches the standard Lichess game board as closely as practical while remaining an independent GloriChess implementation. The detailed contract lives in [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md).
+Replace the temporary click-only board interaction layer with a first-class board UX that matches the standard Lichess game board as closely as practical while remaining an independent Nydra implementation. The detailed contract lives in [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md).
 
 Phase 13 must include both click-to-move and drag-and-drop, Lichess-style quiet-dot/capture-wedge destination markers, selected/last-move/check/hover states, drag threshold + ghost + cancellation semantics, StateDelta-driven move/capture/special-move animations, board-local graphical promotion choices, orientation-safe hit testing, responsive geometry, status/history/undo/redo/FEN development controls, and complete local two-player play.
 
@@ -809,7 +809,7 @@ Add test-only non-chess rules that prove custom state, explicit abilities, multi
 
 Implement the canonical ruleset-agnostic game record described in [`GENERIC_ACTION_NOTATION.md`](./GENERIC_ACTION_NOTATION.md). Persist the ordered authoritative choices that produced each committed turn without storing ephemeral `ChoiceId` values, replay them through the ordinary `InteractionDriver`, and keep SAN/PGN as a chess-specific human notation adapter rather than the universal record model.
 
-The phase must prove replay for arbitrary abilities, multi-step turns, forced continuation, history-dependent mechanics, control changes, and games with more than two players without adding mechanic-specific variants to `glorichess-core`.
+The phase must prove replay for arbitrary abilities, multi-step turns, forced continuation, history-dependent mechanics, control changes, and games with more than two players without adding mechanic-specific variants to `nydra-core`.
 
 ## 15. Definition of done for the first core milestone
 

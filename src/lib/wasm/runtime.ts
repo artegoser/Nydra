@@ -120,7 +120,7 @@ interface WasmModule {
 let modulePromise: Promise<WasmModule> | null = null;
 
 async function loadModule(): Promise<WasmModule> {
-	modulePromise ??= import('./pkg/glorichess.js').then(async (module) => {
+	modulePromise ??= import('./pkg/nydra.js').then(async (module) => {
 		const wasm = module as unknown as WasmModule;
 		await wasm.default();
 		return wasm;

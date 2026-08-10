@@ -3,7 +3,7 @@ use crate::{
     ChessPieceRule, ChessSide, King, Knight, Pawn, PseudoMove, Queen, Rook, BISHOP, KING, KNIGHT,
     PAWN, QUEEN, ROOK,
 };
-use glorichess_core::{
+use nydra_core::{
     Choice, ChoiceInput, ChoiceSpec, EntityId, EntityPresentation, EntityState, EntityTypeId, GameRule,
     GameRuleSet, GameState, History, InteractionFlow, PlayerId, PlayerState, Position,
     RecordedAction, RuleContext, StateMap, TeamId, TeamState, TurnSession,

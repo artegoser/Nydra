@@ -1,12 +1,12 @@
-# GloriChess
+# Nydra
 
-GloriChess is a local-first board-game runtime and Svelte UI. The current implementation milestone is a generic Rust core that will host complete standard chess rules and compile to WebAssembly for the browser.
+Nydra is a local-first programmable game runtime with a Svelte frontend. Its generic Rust core hosts composable entity, ability, game, interaction, history, and outcome rules; standard chess is the first concrete ruleset and compiles to WebAssembly for the browser.
 
 ## Repository layout
 
-- `crates/glorichess-core` — generic state, history, turns, interaction, and runtime primitives.
-- `crates/glorichess-chess` — standard chess rules built on the generic core.
-- `crates/glorichess-wasm` — browser bindings for the Rust runtime.
+- `crates/nydra-core` — generic state, history, turns, interaction, and runtime primitives.
+- `crates/nydra-chess` — standard chess rules built on the generic core.
+- `crates/nydra-wasm` — browser bindings for the Rust runtime.
 - `src` — SvelteKit presentation and input layer.
 - `docs/CORE_IMPLEMENTATION_PLAN.md` — architecture and implementation plan.
 - `docs/CORE_IMPLEMENTATION_CHECKLIST.md` — implementation checklist.
@@ -62,7 +62,7 @@ cargo clippy --workspace --all-targets --all-features
 The normal workspace suite keeps expensive depth-4 perft cases ignored so the development loop stays fast. Run the slow correctness gate explicitly when changing move generation, history semantics, or special-move execution:
 
 ```bash
-cargo test --release -p glorichess-chess perft::tests:: -- --ignored
+cargo test --release -p nydra-chess perft::tests:: -- --ignored
 ```
 
 Frontend:

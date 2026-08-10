@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{pieces::pawn::Pawn, ChessRules, ChessSide, BISHOP, KNIGHT, PAWN, QUEEN, ROOK, WHITE_PLAYER};
-    use glorichess_core::{Position, TurnSession};
+    use nydra_core::{Position, TurnSession};
 
     #[test]
     fn every_standard_promotion_type_executes() {

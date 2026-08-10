@@ -1,4 +1,4 @@
-//! Generic GloriChess game runtime primitives.
+//! Generic Nydra game runtime primitives.
 #![forbid(unsafe_code)]
 
 mod board;

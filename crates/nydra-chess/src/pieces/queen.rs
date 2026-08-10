@@ -1,27 +1,36 @@
 use crate::{
     piece::{ray_attacks, ray_moves, standard_presentation},
-    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP,
+    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, QUEEN,
 };
-use glorichess_core::{
+use nydra_core::{
     EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
 };
 
-const DIRECTIONS: [(i16, i16); 4] = [(1, 1), (1, -1), (-1, -1), (-1, 1)];
+const DIRECTIONS: [(i16, i16); 8] = [
+    (1, 0),
+    (1, 1),
+    (0, 1),
+    (-1, 1),
+    (-1, 0),
+    (-1, -1),
+    (0, -1),
+    (1, -1),
+];
 
-pub struct Bishop;
+pub struct Queen;
 
-impl EntityRule for Bishop {
+impl EntityRule for Queen {
     fn presentation(
         &self,
         context: EntityRuleContext<'_>,
     ) -> Result<EntityPresentation, RuleError> {
-        standard_presentation(context, ChessPieceKind::Bishop)
+        standard_presentation(context, ChessPieceKind::Queen)
     }
 }
 
-impl ChessPieceRule for Bishop {
+impl ChessPieceRule for Queen {
     fn entity_type(&self) -> EntityTypeId {
-        BISHOP
+        QUEEN
     }
 
     fn pseudo_moves(&self, context: ChessPieceContext<'_>) -> Result<Vec<PseudoMove>, ChessError> {

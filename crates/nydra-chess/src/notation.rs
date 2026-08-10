@@ -2,7 +2,7 @@ use crate::{
     pieces::pawn::Pawn, ChessError, ChessMoveKind, ChessOutcome, ChessRules, ChessSide, PseudoMove,
     BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK, STANDARD_FEN, WHITE_PLAYER,
 };
-use glorichess_core::{
+use nydra_core::{
     ChoiceInput, EntityId, EntityTypeId, GameState, GameTimeline, History, Position, StateMap,
     StateValue, TurnRecord, TurnSession,
 };
@@ -209,7 +209,7 @@ impl ChessRules {
 
         let result = result_token(self.status(&final_state, history)?.outcome.as_ref());
         let mut tags = vec![
-            ("Event", "GloriChess local game".to_owned()),
+            ("Event", "Nydra local chess game".to_owned()),
             ("Site", "?".to_owned()),
             ("Date", "????.??.??".to_owned()),
             ("Round", "-".to_owned()),
@@ -360,7 +360,7 @@ impl ChessRules {
     }
 }
 
-fn state_entity_id(data: &glorichess_core::StateMap, key: &str) -> Result<EntityId, ChessError> {
+fn state_entity_id(data: &nydra_core::StateMap, key: &str) -> Result<EntityId, ChessError> {
     data.get(key)
         .and_then(StateValue::as_u64)
         .and_then(|value| u32::try_from(value).ok())
@@ -369,7 +369,7 @@ fn state_entity_id(data: &glorichess_core::StateMap, key: &str) -> Result<Entity
 }
 
 fn action_position(
-    data: &glorichess_core::StateMap,
+    data: &nydra_core::StateMap,
     x_key: &str,
     y_key: &str,
 ) -> Result<Position, ChessError> {

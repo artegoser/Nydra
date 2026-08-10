@@ -1,5 +1,5 @@
 use crate::{ChessError, ChessRules, ChessSide, PseudoMove};
-use glorichess_core::{
+use nydra_core::{
     Choice, ChoiceInput, ChoiceKind, ChoiceSpec, EntityId, History, InteractionError, InteractionFlow,
     InteractionRules, RuleContext, StateMap, TurnSession,
 };
@@ -51,13 +51,13 @@ impl ChessInteractionRules {
         draft.remove(PENDING_Y);
     }
 
-    pub fn pending_target(draft: &StateMap) -> Option<glorichess_core::Position> {
+    pub fn pending_target(draft: &StateMap) -> Option<nydra_core::Position> {
         let x = u16::try_from(draft.get(PENDING_X)?.as_u64()?).ok()?;
         let y = u16::try_from(draft.get(PENDING_Y)?.as_u64()?).ok()?;
-        Some(glorichess_core::Position::new(x, y))
+        Some(nydra_core::Position::new(x, y))
     }
 
-    fn set_pending_target(draft: &mut StateMap, target: glorichess_core::Position) {
+    fn set_pending_target(draft: &mut StateMap, target: nydra_core::Position) {
         draft.insert(PENDING_X, u64::from(target.x));
         draft.insert(PENDING_Y, u64::from(target.y));
     }
@@ -86,7 +86,7 @@ impl ChessInteractionRules {
         &self,
         turn: &TurnSession,
         actor: EntityId,
-        target: glorichess_core::Position,
+        target: nydra_core::Position,
     ) -> Result<PseudoMove, InteractionError> {
         self.legal_moves(turn, actor)?
             .into_iter()
@@ -253,7 +253,7 @@ impl InteractionRules for ChessInteractionRules {
                 let actor_from_choice = choice
                     .data
                     .get("actor")
-                    .and_then(glorichess_core::StateValue::as_u64)
+                    .and_then(nydra_core::StateValue::as_u64)
                     .and_then(|value| u32::try_from(value).ok())
                     .map(EntityId::new)
                     .ok_or_else(|| {

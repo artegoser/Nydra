@@ -1,4 +1,4 @@
-//! Standard chess rules implemented on top of `glorichess-core`.
+//! Standard chess rules implemented on top of `nydra-core`.
 #![forbid(unsafe_code)]
 
 #[cfg(test)]
@@ -38,14 +38,14 @@ pub enum ChessSide {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glorichess_core::{
+    use nydra_core::{
         EntityId, EntityRule, EntityState, EntityTypeId, PlayerId, Position, RuleContext,
         RuleRegistry,
     };
     use std::collections::BTreeSet;
 
     fn add_piece(
-        state: &mut glorichess_core::GameState,
+        state: &mut nydra_core::GameState,
         id: u32,
         entity_type: EntityTypeId,
         side: ChessSide,
@@ -64,24 +64,24 @@ mod tests {
 
     struct KnightOnlyPromotionRule;
 
-    impl glorichess_core::GameRule for KnightOnlyPromotionRule {
+    impl nydra_core::GameRule for KnightOnlyPromotionRule {
         fn transform_choices(
             &self,
-            _context: glorichess_core::RuleContext<'_>,
+            _context: nydra_core::RuleContext<'_>,
             _actor: PlayerId,
-            _draft: &glorichess_core::StateMap,
-            choices: Vec<glorichess_core::ChoiceSpec>,
-        ) -> Result<Vec<glorichess_core::ChoiceSpec>, glorichess_core::RuleError> {
+            _draft: &nydra_core::StateMap,
+            choices: Vec<nydra_core::ChoiceSpec>,
+        ) -> Result<Vec<nydra_core::ChoiceSpec>, nydra_core::RuleError> {
             Ok(choices
                 .into_iter()
                 .filter(|choice| {
-                    if !matches!(&choice.kind, glorichess_core::ChoiceKind::SelectOption { .. }) {
+                    if !matches!(&choice.kind, nydra_core::ChoiceKind::SelectOption { .. }) {
                         return true;
                     }
                     choice
                         .data
                         .get("entity_type")
-                        .and_then(glorichess_core::StateValue::as_u64)
+                        .and_then(nydra_core::StateValue::as_u64)
                         == Some(u64::from(KNIGHT.get()))
                 })
                 .collect())
@@ -90,20 +90,20 @@ mod tests {
 
     struct MarkMovedEntityRule;
 
-    impl glorichess_core::GameRule for MarkMovedEntityRule {
+    impl nydra_core::GameRule for MarkMovedEntityRule {
         fn react(
             &self,
-            _before: &glorichess_core::GameState,
-            action: &glorichess_core::RecordedAction,
-            transaction: &mut glorichess_core::Transaction,
-        ) -> Result<(), glorichess_core::RuleError> {
+            _before: &nydra_core::GameState,
+            action: &nydra_core::RecordedAction,
+            transaction: &mut nydra_core::Transaction,
+        ) -> Result<(), nydra_core::RuleError> {
             if action.kind != "chess_move" {
                 return Ok(());
             }
             let Some(actor) = action
                 .data
                 .get("actor")
-                .and_then(glorichess_core::StateValue::as_u64)
+                .and_then(nydra_core::StateValue::as_u64)
                 .and_then(|value| u32::try_from(value).ok())
                 .map(EntityId::new)
             else {
@@ -165,7 +165,7 @@ mod tests {
                     entity
                         .state
                         .get(crate::piece::HAS_MOVED_STATE)
-                        .and_then(glorichess_core::StateValue::as_bool),
+                        .and_then(nydra_core::StateValue::as_bool),
                     Some(false)
                 );
             } else {
@@ -354,7 +354,7 @@ mod tests {
         );
     }
 
-    fn legal_test_state() -> glorichess_core::GameState {
+    fn legal_test_state() -> nydra_core::GameState {
         empty_chess_state().unwrap()
     }
 
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn chess_interaction_exposes_only_legal_destinations() {
-        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+        use nydra_core::{ChoiceKind, InteractionDriver, TurnSession};
 
         let rules = ChessRules::standard();
         let mut state = legal_test_state();
@@ -432,12 +432,12 @@ mod tests {
             .id;
         driver.choose(rook_choice).unwrap();
 
-        let is_rook_destination = |choice: &glorichess_core::Choice, target: Position| {
+        let is_rook_destination = |choice: &nydra_core::Choice, target: Position| {
             matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == target)
                 && choice
                     .data
                     .get("actor")
-                    .and_then(glorichess_core::StateValue::as_u64)
+                    .and_then(nydra_core::StateValue::as_u64)
                     == Some(u64::from(rook.get()))
         };
         assert!(!driver
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn chess_destinations_are_actor_bound_and_can_execute_without_click_selection() {
-        use glorichess_core::{ChoiceKind, InteractionDriver, InteractionUpdate, TurnSession};
+        use nydra_core::{ChoiceKind, InteractionDriver, InteractionUpdate, TurnSession};
 
         let rules = ChessRules::standard();
         let state = standard_chess_state().unwrap();
@@ -471,7 +471,7 @@ mod tests {
                     && choice
                         .data
                         .get("actor")
-                        .and_then(glorichess_core::StateValue::as_u64)
+                        .and_then(nydra_core::StateValue::as_u64)
                         == Some(u64::from(pawn.get()))
             })
             .unwrap()
@@ -486,7 +486,7 @@ mod tests {
 
     #[test]
     fn selecting_the_same_piece_twice_clears_chess_selection() {
-        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+        use nydra_core::{ChoiceKind, InteractionDriver, TurnSession};
 
         let rules = ChessRules::standard();
         let state = standard_chess_state().unwrap();
@@ -509,7 +509,7 @@ mod tests {
 
     #[test]
     fn en_passant_is_derived_from_the_previous_committed_turn() {
-        use glorichess_core::GameTimeline;
+        use nydra_core::GameTimeline;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -551,7 +551,7 @@ mod tests {
 
     #[test]
     fn black_can_en_passant_after_white_double_move() {
-        use glorichess_core::GameTimeline;
+        use nydra_core::GameTimeline;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -582,7 +582,7 @@ mod tests {
 
     #[test]
     fn en_passant_expires_after_the_immediate_reply() {
-        use glorichess_core::GameTimeline;
+        use nydra_core::GameTimeline;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -635,7 +635,7 @@ mod tests {
 
     #[test]
     fn en_passant_is_rejected_when_it_exposes_the_king() {
-        use glorichess_core::GameTimeline;
+        use nydra_core::GameTimeline;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -665,7 +665,7 @@ mod tests {
 
     #[test]
     fn castling_is_derived_from_king_and_rook_entity_state() {
-        use glorichess_core::TurnSession;
+        use nydra_core::TurnSession;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -733,7 +733,7 @@ mod tests {
 
     #[test]
     fn promotion_waits_for_an_explicit_interaction_choice_and_supports_underpromotion() {
-        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+        use nydra_core::{ChoiceKind, InteractionDriver, TurnSession};
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -787,7 +787,7 @@ mod tests {
 
     #[test]
     fn game_rule_can_filter_piece_owned_promotion_choices_without_redefining_pawn() {
-        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+        use nydra_core::{ChoiceKind, InteractionDriver, TurnSession};
 
         let mut rules = ChessRules::standard();
         rules.register_game_rule(KnightOnlyPromotionRule);
@@ -831,7 +831,7 @@ mod tests {
 
     #[test]
     fn direct_execution_cannot_bypass_game_rule_filtered_piece_input() {
-        use glorichess_core::TurnSession;
+        use nydra_core::TurnSession;
 
         let mut rules = ChessRules::standard();
         rules.register_game_rule(KnightOnlyPromotionRule);
@@ -866,7 +866,7 @@ mod tests {
 
     #[test]
     fn chess_execution_runs_registered_game_rule_reactions_in_same_transaction() {
-        use glorichess_core::TurnSession;
+        use nydra_core::TurnSession;
 
         let mut rules = ChessRules::standard();
         rules.register_game_rule(MarkMovedEntityRule);
@@ -894,7 +894,7 @@ mod tests {
                 .unwrap()
                 .state
                 .get("game_rule_reacted")
-                .and_then(glorichess_core::StateValue::as_bool),
+                .and_then(nydra_core::StateValue::as_bool),
             Some(true)
         );
         assert!(state.entity(knight).unwrap().state.is_empty());
@@ -902,7 +902,7 @@ mod tests {
 
     #[test]
     fn capture_promotion_removes_the_target_and_changes_type() {
-        use glorichess_core::TurnSession;
+        use nydra_core::TurnSession;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -924,7 +924,7 @@ mod tests {
     }
 
     fn commit_to(
-        timeline: &mut glorichess_core::GameTimeline,
+        timeline: &mut nydra_core::GameTimeline,
         rules: &ChessRules,
         entity: EntityId,
         to: Position,
@@ -945,7 +945,7 @@ mod tests {
 
     #[test]
     fn status_detects_checkmate_and_stalemate() {
-        use glorichess_core::History;
+        use nydra_core::History;
 
         let rules = ChessRules::standard();
         let history = History::default();
@@ -986,7 +986,7 @@ mod tests {
 
     #[test]
     fn resignation_and_draw_agreement_are_persistent_terminal_outcomes() {
-        use glorichess_core::History;
+        use nydra_core::History;
 
         let rules = ChessRules::standard();
         let history = History::default();
@@ -1016,7 +1016,7 @@ mod tests {
 
     #[test]
     fn repetition_key_tracks_side_castling_and_effective_en_passant() {
-        use glorichess_core::{GameTimeline, History};
+        use nydra_core::{GameTimeline, History};
 
         let rules = ChessRules::standard();
         let mut with_rights = empty_chess_state().unwrap();
@@ -1050,7 +1050,7 @@ mod tests {
 
     #[test]
     fn threefold_is_claimable_and_fivefold_is_automatic() {
-        use glorichess_core::GameTimeline;
+        use nydra_core::GameTimeline;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -1096,7 +1096,7 @@ mod tests {
 
     #[test]
     fn halfmove_clock_resets_and_fifty_seventy_five_rules_are_exposed() {
-        use glorichess_core::{History, TurnSession};
+        use nydra_core::{History, TurnSession};
 
         let rules = ChessRules::standard();
         let history = History::default();
@@ -1150,7 +1150,7 @@ mod tests {
 
     #[test]
     fn capture_resets_halfmove_clock() {
-        use glorichess_core::TurnSession;
+        use nydra_core::TurnSession;
 
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
@@ -1172,7 +1172,7 @@ mod tests {
 
     #[test]
     fn dead_positions_are_automatic_and_checkmate_precedes_75_move_rule() {
-        use glorichess_core::History;
+        use nydra_core::History;
 
         let rules = ChessRules::standard();
         let history = History::default();

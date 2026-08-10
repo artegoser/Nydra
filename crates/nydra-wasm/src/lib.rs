@@ -1,10 +1,10 @@
-//! Browser boundary for the GloriChess Rust runtime.
+//! Browser boundary for the Nydra Rust runtime.
 #![forbid(unsafe_code)]
 
-use glorichess_chess::{
+use nydra_chess::{
     standard_chess_state, ChessInteractionRules, ChessOutcome, ChessRules, ChessSide, STANDARD_FEN,
 };
-use glorichess_core::{
+use nydra_core::{
     Choice, ChoiceId, ChoiceKind, EntityState, GameState, GameTimeline, InteractionDriver,
     InteractionUpdate, PlayerState, Position, PresentationCue, StateChange, StateDelta, StateMap,
     StepRecord, TeamState, TurnState,
@@ -14,7 +14,7 @@ use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub fn runtime_name() -> String {
-    "glorichess".to_owned()
+    "nydra".to_owned()
 }
 
 #[wasm_bindgen]
@@ -253,7 +253,7 @@ impl GameHandle {
     }
 
     pub fn history(&self) -> Result<JsValue, JsValue> {
-        let mut prefix = glorichess_core::History::default();
+        let mut prefix = nydra_core::History::default();
         let mut turns = Vec::new();
         for (index, turn) in self.timeline.history().turns().iter().enumerate() {
             if turn.synthetic {
@@ -357,7 +357,7 @@ pub struct GameView {
 fn build_game_view(
     rules: &ChessRules,
     state: &GameState,
-    history: &glorichess_core::History,
+    history: &nydra_core::History,
     can_undo: bool,
     can_redo: bool,
 ) -> Result<GameView, String> {
@@ -423,7 +423,7 @@ fn build_game_view(
     })
 }
 
-fn last_move_view(history: &glorichess_core::History) -> Option<MoveEndpointsView> {
+fn last_move_view(history: &nydra_core::History) -> Option<MoveEndpointsView> {
     let step = history
         .turns()
         .iter()
@@ -539,7 +539,7 @@ impl From<&Choice> for ChoiceView {
             move_kind: choice
                 .data
                 .get("move_kind")
-                .and_then(glorichess_core::StateValue::as_str)
+                .and_then(nydra_core::StateValue::as_str)
                 .map(str::to_owned),
             target_position: match (
                 state_u16(&choice.data, "target_x"),
@@ -579,13 +579,13 @@ impl From<&Choice> for ChoiceView {
 
 fn state_u32(data: &StateMap, key: &str) -> Option<u32> {
     data.get(key)
-        .and_then(glorichess_core::StateValue::as_u64)
+        .and_then(nydra_core::StateValue::as_u64)
         .and_then(|value| u32::try_from(value).ok())
 }
 
 fn state_u16(data: &StateMap, key: &str) -> Option<u16> {
     data.get(key)
-        .and_then(glorichess_core::StateValue::as_u64)
+        .and_then(nydra_core::StateValue::as_u64)
         .and_then(|value| u16::try_from(value).ok())
 }
 

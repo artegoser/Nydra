@@ -1,5 +1,5 @@
 use crate::{ChessError, ChessSide};
-use glorichess_core::{
+use nydra_core::{
     ChoiceInput, ChoiceSpec, EntityId, EntityPresentation, EntityRule, EntityRuleContext,
     EntityState, EntityTypeId, GameState, History, Position, RuleError,
 };
@@ -22,7 +22,7 @@ pub(crate) fn has_moved(entity: &EntityState) -> bool {
     entity
         .state
         .get(HAS_MOVED_STATE)
-        .and_then(glorichess_core::StateValue::as_bool)
+        .and_then(nydra_core::StateValue::as_bool)
         .unwrap_or(false)
 }
 

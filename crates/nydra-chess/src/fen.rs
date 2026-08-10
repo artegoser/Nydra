@@ -4,7 +4,7 @@ use crate::{
 };
 pub const STANDARD_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-use glorichess_core::{EntityId, EntityState, EntityTypeId, GameState, GameTimeline, History, Position};
+use nydra_core::{EntityId, EntityState, EntityTypeId, GameState, GameTimeline, History, Position};
 
 pub struct FenGame {
     pub timeline: GameTimeline,

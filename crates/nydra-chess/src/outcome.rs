@@ -3,7 +3,7 @@ use crate::{
     pieces::pawn::en_passant_moves_from_previous, ChessError, ChessPieceContext,
     ChessRules, ChessSide, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
 };
-use glorichess_core::{
+use nydra_core::{
     EntityTypeId, GameOutcome, GameState, History, OutcomeRule, PlayerId, Position, RuleContext,
     RuleError, StateValue, TurnRecord,
 };

@@ -1,4 +1,4 @@
-use glorichess_core::{CoreError, EntityId, EntityTypeId, PlayerId, Position, RuleError};
+use nydra_core::{CoreError, EntityId, EntityTypeId, PlayerId, Position, RuleError};
 use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]

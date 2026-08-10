@@ -1,27 +1,27 @@
 use crate::{
     piece::{ray_attacks, ray_moves, standard_presentation},
-    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, ROOK,
+    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP,
 };
-use glorichess_core::{
+use nydra_core::{
     EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
 };
 
-const DIRECTIONS: [(i16, i16); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+const DIRECTIONS: [(i16, i16); 4] = [(1, 1), (1, -1), (-1, -1), (-1, 1)];
 
-pub struct Rook;
+pub struct Bishop;
 
-impl EntityRule for Rook {
+impl EntityRule for Bishop {
     fn presentation(
         &self,
         context: EntityRuleContext<'_>,
     ) -> Result<EntityPresentation, RuleError> {
-        standard_presentation(context, ChessPieceKind::Rook)
+        standard_presentation(context, ChessPieceKind::Bishop)
     }
 }
 
-impl ChessPieceRule for Rook {
+impl ChessPieceRule for Bishop {
     fn entity_type(&self) -> EntityTypeId {
-        ROOK
+        BISHOP
     }
 
     fn pseudo_moves(&self, context: ChessPieceContext<'_>) -> Result<Vec<PseudoMove>, ChessError> {
