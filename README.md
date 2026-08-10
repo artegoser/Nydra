@@ -32,13 +32,13 @@ Install frontend dependencies:
 pnpm install --frozen-lockfile
 ```
 
-Run the existing Svelte application:
+Run the local Svelte application backed by the Rust/WASM chess runtime:
 
 ```bash
 pnpm dev
 ```
 
-Build the browser WASM package:
+`pnpm dev`, `pnpm build`, and `pnpm check` build the browser WASM package first. You can also build it explicitly:
 
 ```bash
 pnpm wasm:build
@@ -51,9 +51,9 @@ The generated bindings are written to `src/lib/wasm/pkg/` and are not committed.
 Rust:
 
 ```bash
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
+cargo check --workspace
+cargo clippy --workspace --all-targets --all-features
 ```
 
 Frontend:

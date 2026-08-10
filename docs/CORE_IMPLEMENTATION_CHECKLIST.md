@@ -255,7 +255,7 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 10 — FEN
 
-- [ ] Remove TypeScript FEN authority.
+- [x] Remove TypeScript FEN authority.
 - [x] Parse piece placement in Rust.
 - [x] Parse side to move.
 - [x] Parse castling field.
@@ -290,17 +290,17 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 12 — Svelte game-model migration
 
-- [ ] Wire the WASM module into the Svelte/Vite application.
-- [ ] Make `GameHandle` the authoritative local game state.
-- [ ] Remove gameplay use of `src/lib/pieces/*.ts`.
-- [ ] Remove TypeScript `BoardPieces` authority.
-- [ ] Remove TypeScript FEN parser/authority.
-- [ ] Preserve existing SVG piece assets.
-- [ ] Adapt `Board.svelte` to `GameView`.
-- [ ] Adapt piece rendering to entity/presentation DTOs.
-- [ ] Render Rust-provided legal selections.
-- [ ] Send selected `ChoiceId`/input back to WASM.
-- [ ] Ensure Svelte contains no duplicated legality checks.
+- [x] Wire the WASM module into the Svelte/Vite application.
+- [x] Make `GameHandle` the authoritative local game state.
+- [x] Remove gameplay use of `src/lib/pieces/*.ts`.
+- [x] Remove TypeScript `BoardPieces` authority.
+- [x] Remove TypeScript FEN parser/authority.
+- [x] Preserve existing SVG piece assets.
+- [x] Adapt `Board.svelte` to `GameView`.
+- [x] Adapt piece rendering to entity/presentation DTOs.
+- [x] Render Rust-provided legal selections.
+- [x] Send selected `ChoiceId`/input back to WASM.
+- [x] Ensure Svelte contains no duplicated legality checks.
 
 ## Phase 13 — Interactive local chess UI
 

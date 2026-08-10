@@ -1,7 +1,0 @@
-import { Piece } from './main';
-
-export class King extends Piece {
-	constructor(color: string) {
-		super('King', color);
-	}
-}

@@ -79,3 +79,62 @@ body {
 	right: 4cqmin;
 	top: 4cqmin;
 }
+
+.board-shell {
+	@apply flex flex-col items-start gap-3;
+}
+
+.board {
+	width: 800px;
+	height: 800px;
+}
+
+.interaction-square {
+	appearance: none;
+	border: 0;
+	padding: 0;
+	margin: 0;
+	background: transparent;
+	position: relative;
+}
+
+.interaction-square:disabled {
+	cursor: default;
+}
+
+.interaction-square.selectable-piece:not(:disabled) {
+	cursor: pointer;
+}
+
+.interaction-square.legal-target:not(:disabled) {
+	cursor: pointer;
+}
+
+.legal-marker {
+	position: absolute;
+	width: 28%;
+	height: 28%;
+	border-radius: 9999px;
+	background: rgb(0 0 0 / 22%);
+	left: 36%;
+	top: 36%;
+	pointer-events: none;
+}
+
+.runtime-state,
+.runtime-options {
+	@apply ml-5 flex gap-2 text-sm text-zinc-200;
+}
+
+.runtime-options button {
+	@apply rounded bg-zinc-700 px-3 py-1.5 hover:bg-zinc-600;
+}
+
+.runtime-loading,
+.runtime-error {
+	@apply m-5 text-zinc-200;
+}
+
+.runtime-error {
+	@apply text-red-400;
+}
