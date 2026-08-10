@@ -91,7 +91,6 @@ impl History {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransactionResult<T> {
     pub value: T,
@@ -125,9 +124,8 @@ impl TurnSession {
         action: RecordedAction,
         operation: impl FnOnce(&mut GameState) -> Result<T, CoreError>,
     ) -> Result<T, CoreError> {
-        let result = self.apply_transaction(action, |transaction| {
-            operation(transaction.raw_state_mut())
-        })?;
+        let result =
+            self.apply_transaction(action, |transaction| operation(transaction.raw_state_mut()))?;
         Ok(result.value)
     }
 
@@ -261,11 +259,7 @@ impl GameTimeline {
         self.history.state_at_turn_boundary(boundary)
     }
 
-    pub fn entity_turns_ago(
-        &self,
-        entity: EntityId,
-        turns_ago: usize,
-    ) -> Option<&EntityState> {
+    pub fn entity_turns_ago(&self, entity: EntityId, turns_ago: usize) -> Option<&EntityState> {
         self.state_turns_ago(turns_ago)
             .and_then(|state| state.entities.get(&entity))
     }

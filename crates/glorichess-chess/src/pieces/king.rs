@@ -1,8 +1,10 @@
 use crate::{
-    leaper_attacks, leaper_moves, standard_presentation, ChessError, ChessPieceContext,
-    ChessPieceKind, ChessPieceRule, PseudoMove, KING,
+    piece::{leaper_attacks, leaper_moves, standard_presentation},
+    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, KING,
 };
-use glorichess_core::{EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError};
+use glorichess_core::{
+    EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
+};
 
 const OFFSETS: [(i16, i16); 8] = [
     (1, 0),

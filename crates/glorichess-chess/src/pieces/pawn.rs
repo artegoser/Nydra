@@ -1,8 +1,10 @@
 use crate::{
-    offset, standard_presentation, ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule,
-    PseudoMove, PAWN,
+    piece::{offset, standard_presentation},
+    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, PAWN,
 };
-use glorichess_core::{EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError};
+use glorichess_core::{
+    EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
+};
 
 pub struct Pawn;
 
@@ -58,7 +60,14 @@ impl ChessPieceRule for Pawn {
         let side = context.side()?;
         Ok([-1_i16, 1_i16]
             .into_iter()
-            .filter_map(|dx| offset(context.state(), context.entity().position, dx, side.forward()))
+            .filter_map(|dx| {
+                offset(
+                    context.state(),
+                    context.entity().position,
+                    dx,
+                    side.forward(),
+                )
+            })
             .collect())
     }
 }

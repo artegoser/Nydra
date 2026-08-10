@@ -1,6 +1,4 @@
-use crate::{
-    Board, CoreError, EntityId, EntityTypeId, PlayerId, Position, StateMap, TeamId,
-};
+use crate::{Board, CoreError, EntityId, EntityTypeId, PlayerId, Position, StateMap, TeamId};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -189,7 +187,9 @@ impl GameState {
     pub fn remove_entity(&mut self, id: EntityId) -> Result<EntityState, CoreError> {
         let position = self.entity(id)?.position;
         self.board.clear(position, id)?;
-        self.entities.remove(&id).ok_or(CoreError::EntityNotFound(id))
+        self.entities
+            .remove(&id)
+            .ok_or(CoreError::EntityNotFound(id))
     }
 
     pub fn set_owner(&mut self, entity: EntityId, owner: PlayerId) -> Result<(), CoreError> {

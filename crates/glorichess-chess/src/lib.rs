@@ -22,8 +22,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ChessSide {
     White,
-    Black,
-}
+    Black,}
 
 #[cfg(test)]
 mod tests {
@@ -58,10 +57,38 @@ mod tests {
         assert_eq!(state.board.height(), 8);
         assert_eq!(state.entities.len(), 32);
         assert_eq!(state.turn.active_players, vec![WHITE_PLAYER]);
-        assert_eq!(state.entity_at(Position::new(4, 0)).unwrap().unwrap().entity_type, KING);
-        assert_eq!(state.entity_at(Position::new(3, 7)).unwrap().unwrap().entity_type, QUEEN);
-        assert_eq!(state.entity_at(Position::new(0, 1)).unwrap().unwrap().entity_type, PAWN);
-        assert_eq!(state.entity_at(Position::new(7, 6)).unwrap().unwrap().entity_type, PAWN);
+        assert_eq!(
+            state
+                .entity_at(Position::new(4, 0))
+                .unwrap()
+                .unwrap()
+                .entity_type,
+            KING
+        );
+        assert_eq!(
+            state
+                .entity_at(Position::new(3, 7))
+                .unwrap()
+                .unwrap()
+                .entity_type,
+            QUEEN
+        );
+        assert_eq!(
+            state
+                .entity_at(Position::new(0, 1))
+                .unwrap()
+                .unwrap()
+                .entity_type,
+            PAWN
+        );
+        assert_eq!(
+            state
+                .entity_at(Position::new(7, 6))
+                .unwrap()
+                .unwrap()
+                .entity_type,
+            PAWN
+        );
         state.validate().unwrap();
     }
 
@@ -77,20 +104,8 @@ mod tests {
     fn pawn_moves_attacks_captures_and_blocking_are_distinct() {
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
-        let pawn = add_piece(
-            &mut state,
-            1,
-            PAWN,
-            ChessSide::White,
-            Position::new(3, 1),
-        );
-        let enemy = add_piece(
-            &mut state,
-            2,
-            KNIGHT,
-            ChessSide::Black,
-            Position::new(4, 2),
-        );
+        let pawn = add_piece(&mut state, 1, PAWN, ChessSide::White, Position::new(3, 1));
+        let enemy = add_piece(&mut state, 2, KNIGHT, ChessSide::Black, Position::new(4, 2));
 
         let moves = rules.pseudo_moves(&state, pawn).unwrap();
         assert_eq!(
@@ -110,45 +125,34 @@ mod tests {
             Some(enemy)
         );
         assert_eq!(
-            rules.attacks(&state, pawn).unwrap().into_iter().collect::<BTreeSet<_>>(),
+            rules
+                .attacks(&state, pawn)
+                .unwrap()
+                .into_iter()
+                .collect::<BTreeSet<_>>(),
             BTreeSet::from([Position::new(2, 2), Position::new(4, 2)])
         );
 
-        add_piece(
-            &mut state,
-            3,
-            BISHOP,
-            ChessSide::White,
-            Position::new(3, 2),
-        );
+        add_piece(&mut state, 3, BISHOP, ChessSide::White, Position::new(3, 2));
         let blocked = rules.pseudo_moves(&state, pawn).unwrap();
-        assert_eq!(destinations(&blocked), BTreeSet::from([Position::new(4, 2)]));
+        assert_eq!(
+            destinations(&blocked),
+            BTreeSet::from([Position::new(4, 2)])
+        );
     }
 
     #[test]
     fn pawn_double_move_requires_start_rank_and_unmoved_state() {
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
-        let pawn = add_piece(
-            &mut state,
-            1,
-            PAWN,
-            ChessSide::White,
-            Position::new(3, 3),
-        );
+        let pawn = add_piece(&mut state, 1, PAWN, ChessSide::White, Position::new(3, 3));
         assert_eq!(
             destinations(&rules.pseudo_moves(&state, pawn).unwrap()),
             BTreeSet::from([Position::new(3, 4)])
         );
 
         state.remove_entity(pawn).unwrap();
-        let pawn = add_piece(
-            &mut state,
-            2,
-            PAWN,
-            ChessSide::White,
-            Position::new(3, 1),
-        );
+        let pawn = add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(3, 1));
         state.entity_mut(pawn).unwrap().move_count = 1;
         assert_eq!(
             destinations(&rules.pseudo_moves(&state, pawn).unwrap()),
@@ -160,23 +164,15 @@ mod tests {
     fn knight_generates_leaps_and_ignores_intervening_pieces() {
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
-        let knight = add_piece(
-            &mut state,
-            1,
-            KNIGHT,
-            ChessSide::White,
-            Position::new(1, 0),
-        );
-        add_piece(
-            &mut state,
-            2,
-            PAWN,
-            ChessSide::White,
-            Position::new(1, 1),
-        );
+        let knight = add_piece(&mut state, 1, KNIGHT, ChessSide::White, Position::new(1, 0));
+        add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(1, 1));
         assert_eq!(
             destinations(&rules.pseudo_moves(&state, knight).unwrap()),
-            BTreeSet::from([Position::new(0, 2), Position::new(2, 2), Position::new(3, 1)])
+            BTreeSet::from([
+                Position::new(0, 2),
+                Position::new(2, 2),
+                Position::new(3, 1)
+            ])
         );
     }
 
@@ -184,32 +180,20 @@ mod tests {
     fn sliding_piece_stops_at_first_occupied_square() {
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
-        let rook = add_piece(
-            &mut state,
-            1,
-            ROOK,
-            ChessSide::White,
-            Position::new(3, 3),
-        );
-        add_piece(
-            &mut state,
-            2,
-            PAWN,
-            ChessSide::White,
-            Position::new(3, 5),
-        );
-        let enemy = add_piece(
-            &mut state,
-            3,
-            PAWN,
-            ChessSide::Black,
-            Position::new(5, 3),
-        );
+        let rook = add_piece(&mut state, 1, ROOK, ChessSide::White, Position::new(3, 3));
+        add_piece(&mut state, 2, PAWN, ChessSide::White, Position::new(3, 5));
+        let enemy = add_piece(&mut state, 3, PAWN, ChessSide::Black, Position::new(5, 3));
 
         let moves = rules.pseudo_moves(&state, rook).unwrap();
-        assert!(moves.iter().any(|movement| movement.to == Position::new(3, 4)));
-        assert!(!moves.iter().any(|movement| movement.to == Position::new(3, 5)));
-        assert!(!moves.iter().any(|movement| movement.to == Position::new(3, 6)));
+        assert!(moves
+            .iter()
+            .any(|movement| movement.to == Position::new(3, 4)));
+        assert!(!moves
+            .iter()
+            .any(|movement| movement.to == Position::new(3, 5)));
+        assert!(!moves
+            .iter()
+            .any(|movement| movement.to == Position::new(3, 6)));
         assert_eq!(
             moves
                 .iter()
@@ -218,7 +202,9 @@ mod tests {
                 .capture,
             Some(enemy)
         );
-        assert!(!moves.iter().any(|movement| movement.to == Position::new(6, 3)));
+        assert!(!moves
+            .iter()
+            .any(|movement| movement.to == Position::new(6, 3)));
 
         let attacks = rules.attacks(&state, rook).unwrap();
         assert!(attacks.contains(&Position::new(3, 5)));
@@ -231,27 +217,9 @@ mod tests {
     fn bishop_queen_and_king_generate_expected_geometry() {
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
-        let bishop = add_piece(
-            &mut state,
-            1,
-            BISHOP,
-            ChessSide::White,
-            Position::new(3, 3),
-        );
-        let queen = add_piece(
-            &mut state,
-            2,
-            QUEEN,
-            ChessSide::White,
-            Position::new(0, 0),
-        );
-        let king = add_piece(
-            &mut state,
-            3,
-            KING,
-            ChessSide::Black,
-            Position::new(7, 7),
-        );
+        let bishop = add_piece(&mut state, 1, BISHOP, ChessSide::White, Position::new(3, 3));
+        let queen = add_piece(&mut state, 2, QUEEN, ChessSide::White, Position::new(0, 0));
+        let king = add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(7, 7));
 
         let bishop_moves = destinations(&rules.pseudo_moves(&state, bishop).unwrap());
         assert!(bishop_moves.contains(&Position::new(4, 4)));
@@ -290,19 +258,17 @@ mod tests {
     fn black_pawn_uses_the_opposite_forward_direction() {
         let rules = ChessRules::standard();
         let mut state = empty_chess_state().unwrap();
-        let pawn = add_piece(
-            &mut state,
-            1,
-            PAWN,
-            ChessSide::Black,
-            Position::new(4, 6),
-        );
+        let pawn = add_piece(&mut state, 1, PAWN, ChessSide::Black, Position::new(4, 6));
         assert_eq!(
             destinations(&rules.pseudo_moves(&state, pawn).unwrap()),
             BTreeSet::from([Position::new(4, 4), Position::new(4, 5)])
         );
         assert_eq!(
-            rules.attacks(&state, pawn).unwrap().into_iter().collect::<BTreeSet<_>>(),
+            rules
+                .attacks(&state, pawn)
+                .unwrap()
+                .into_iter()
+                .collect::<BTreeSet<_>>(),
             BTreeSet::from([Position::new(3, 5), Position::new(5, 5)])
         );
     }

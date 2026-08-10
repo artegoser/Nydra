@@ -4,8 +4,8 @@
 mod board;
 mod error;
 mod history;
-mod interaction;
 mod ids;
+mod interaction;
 mod rules;
 mod state;
 mod transaction;
@@ -16,11 +16,11 @@ pub use error::CoreError;
 pub use history::{
     GameTimeline, History, RecordedAction, StepRecord, TransactionResult, TurnRecord, TurnSession,
 };
+pub use ids::{AbilityId, ChoiceId, EntityId, EntityTypeId, PlayerId, TeamId};
 pub use interaction::{
     recorded_step, Choice, ChoiceIssuer, ChoiceKind, ChoiceSpec, Interaction, InteractionDriver,
     InteractionError, InteractionFlow, InteractionRules, InteractionUpdate,
 };
-pub use ids::{AbilityId, ChoiceId, EntityId, EntityTypeId, PlayerId, TeamId};
 pub use rules::{
     AbilityRule, EntityPresentation, EntityRule, EntityRuleContext, GameRule, RuleContext,
     RuleError, RuleRegistry,
@@ -29,9 +29,7 @@ pub use state::{
     EntityData, EntityState, EntityStore, GameState, PlayerData, PlayerState, PlayerStore,
     RulesetState, TeamData, TeamState, TeamStore, TurnData, TurnState,
 };
-pub use transaction::{
-    PresentationCue, StateChange, StateDelta, Transaction, TransactionOutcome,
-};
+pub use transaction::{PresentationCue, StateChange, StateDelta, Transaction, TransactionOutcome};
 pub use value::{StateMap, StateValue};
 
 #[cfg(test)]
@@ -79,11 +77,17 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(state.entity_at(Position::new(1, 1)).unwrap().unwrap().id, entity_id);
+        assert_eq!(
+            state.entity_at(Position::new(1, 1)).unwrap().unwrap().id,
+            entity_id
+        );
         state.move_entity(entity_id, Position::new(2, 2)).unwrap();
         assert!(state.entity_at(Position::new(1, 1)).unwrap().is_none());
         assert_eq!(state.entity(entity_id).unwrap().move_count, 1);
-        assert_eq!(state.entity(entity_id).unwrap().position, Position::new(2, 2));
+        assert_eq!(
+            state.entity(entity_id).unwrap().position,
+            Position::new(2, 2)
+        );
 
         let removed = state.remove_entity(entity_id).unwrap();
         assert_eq!(removed.id, entity_id);
@@ -125,11 +129,19 @@ mod tests {
         state.ruleset_state.insert("round", 4_u32);
 
         assert_eq!(
-            state.entity(EntityId::new(7)).unwrap().state.get("health").and_then(StateValue::as_u64),
+            state
+                .entity(EntityId::new(7))
+                .unwrap()
+                .state
+                .get("health")
+                .and_then(StateValue::as_u64),
             Some(100)
         );
         assert_eq!(
-            state.ruleset_state.get("round").and_then(StateValue::as_u64),
+            state
+                .ruleset_state
+                .get("round")
+                .and_then(StateValue::as_u64),
             Some(4)
         );
     }
@@ -189,8 +201,14 @@ mod tests {
         .unwrap();
 
         assert_eq!(turn.steps.len(), 2);
-        assert_eq!(turn.working.entity(entity).unwrap().position, Position::new(2, 0));
-        assert_eq!(turn.before.entity(entity).unwrap().position, Position::new(0, 0));
+        assert_eq!(
+            turn.working.entity(entity).unwrap().position,
+            Position::new(2, 0)
+        );
+        assert_eq!(
+            turn.before.entity(entity).unwrap().position,
+            Position::new(0, 0)
+        );
     }
 
     #[test]
@@ -204,7 +222,13 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(candidate.ruleset_state.get("speculative").and_then(StateValue::as_bool), Some(true));
+        assert_eq!(
+            candidate
+                .ruleset_state
+                .get("speculative")
+                .and_then(StateValue::as_bool),
+            Some(true)
+        );
         assert!(!turn.working.ruleset_state.contains_key("speculative"));
         assert!(turn.steps.is_empty());
     }
@@ -230,17 +254,29 @@ mod tests {
         .unwrap();
         timeline.commit_turn(turn).unwrap();
 
-        assert_eq!(timeline.current().entity(entity).unwrap().position, Position::new(1, 0));
+        assert_eq!(
+            timeline.current().entity(entity).unwrap().position,
+            Position::new(1, 0)
+        );
         assert_eq!(timeline.history().len(), 1);
         assert_eq!(timeline.history().last_step().unwrap().action.kind, "move");
-        assert_eq!(timeline.entity_turns_ago(entity, 1).unwrap().position, Position::new(0, 0));
+        assert_eq!(
+            timeline.entity_turns_ago(entity, 1).unwrap().position,
+            Position::new(0, 0)
+        );
 
         timeline.undo().unwrap();
-        assert_eq!(timeline.current().entity(entity).unwrap().position, Position::new(0, 0));
+        assert_eq!(
+            timeline.current().entity(entity).unwrap().position,
+            Position::new(0, 0)
+        );
         assert!(timeline.can_redo());
 
         timeline.redo().unwrap();
-        assert_eq!(timeline.current().entity(entity).unwrap().position, Position::new(1, 0));
+        assert_eq!(
+            timeline.current().entity(entity).unwrap().position,
+            Position::new(1, 0)
+        );
         assert_eq!(timeline.history().len(), 1);
     }
 
@@ -254,7 +290,13 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(turn.working.ruleset_state.get("changed").and_then(StateValue::as_bool), Some(true));
+        assert_eq!(
+            turn.working
+                .ruleset_state
+                .get("changed")
+                .and_then(StateValue::as_bool),
+            Some(true)
+        );
         let rolled_back = turn.rollback();
         assert_eq!(rolled_back, state);
     }
@@ -274,7 +316,11 @@ mod tests {
                 0 => vec![ChoiceSpec::position(Position::new(1, 0))],
                 1 => vec![ChoiceSpec::position(Position::new(2, 0))],
                 2 => vec![ChoiceSpec::finish_turn()],
-                _ => return Err(InteractionError::RuleViolation("unexpected chain state".into())),
+                _ => {
+                    return Err(InteractionError::RuleViolation(
+                        "unexpected chain state".into(),
+                    ))
+                }
             };
             Ok(choices)
         }
@@ -327,7 +373,10 @@ mod tests {
                 return Ok(vec![ChoiceSpec::option("normal")]);
             }
 
-            assert_eq!(turn.working.entity(self.actor)?.position, Position::new(1, 0));
+            assert_eq!(
+                turn.working.entity(self.actor)?.position,
+                Position::new(1, 0)
+            );
             Ok(vec![ChoiceSpec::finish_turn()])
         }
 
@@ -385,11 +434,15 @@ mod tests {
         let mut driver = InteractionDriver::new(ForcedChainRules { entity }, turn).unwrap();
 
         let first = driver.interaction().choices[0].clone();
-        assert!(matches!(&first.kind, ChoiceKind::SelectPosition { position } if *position == Position::new(1, 0)));
+        assert!(
+            matches!(&first.kind, ChoiceKind::SelectPosition { position } if *position == Position::new(1, 0))
+        );
         driver.choose(first.id).unwrap();
 
         let second = driver.interaction().choices[0].clone();
-        assert!(matches!(&second.kind, ChoiceKind::SelectPosition { position } if *position == Position::new(2, 0)));
+        assert!(
+            matches!(&second.kind, ChoiceKind::SelectPosition { position } if *position == Position::new(2, 0))
+        );
         assert!(!driver
             .interaction()
             .choices
@@ -398,7 +451,10 @@ mod tests {
         driver.choose(second.id).unwrap();
 
         assert_eq!(driver.turn().steps.len(), 2);
-        assert!(matches!(&driver.interaction().choices[0].kind, ChoiceKind::FinishTurn));
+        assert!(matches!(
+            &driver.interaction().choices[0].kind,
+            ChoiceKind::FinishTurn
+        ));
         let finish = driver.interaction().choices[0].id;
         assert_eq!(driver.choose(finish).unwrap(), InteractionUpdate::Finished);
         assert!(driver.is_finished());
@@ -439,7 +495,10 @@ mod tests {
 
         // A simple move is offered directly; there is no pointless ability menu first.
         let move_choice = driver.interaction().choices[0].clone();
-        assert!(matches!(&move_choice.kind, ChoiceKind::SelectPosition { .. }));
+        assert!(matches!(
+            &move_choice.kind,
+            ChoiceKind::SelectPosition { .. }
+        ));
         driver.choose(move_choice.id).unwrap();
 
         let ability_choice = driver
@@ -452,7 +511,9 @@ mod tests {
         driver.choose(ability_choice.id).unwrap();
 
         let target_choice = driver.interaction().choices[0].clone();
-        assert!(matches!(&target_choice.kind, ChoiceKind::SelectEntity { entity } if *entity == target));
+        assert!(
+            matches!(&target_choice.kind, ChoiceKind::SelectEntity { entity } if *entity == target)
+        );
         driver.choose(target_choice.id).unwrap();
 
         let option_choice = driver.interaction().choices[0].clone();
@@ -496,7 +557,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn transaction_traces_structural_changes_and_presentation() {
         let mut state = sample_state();
@@ -515,11 +575,18 @@ mod tests {
             .move_entity(entity, Position::new(1, 0))
             .unwrap();
         transaction.entity_mut(entity).unwrap().entity_type = EntityTypeId::new(4);
-        transaction.entity_mut(entity).unwrap().state.insert("health", 80_u32);
+        transaction
+            .entity_mut(entity)
+            .unwrap()
+            .state
+            .insert("health", 80_u32);
         transaction.present(PresentationCue::new("test_cast"));
         let outcome = transaction.finish().unwrap();
 
-        assert_eq!(outcome.state.entity(entity).unwrap().position, Position::new(1, 0));
+        assert_eq!(
+            outcome.state.entity(entity).unwrap().position,
+            Position::new(1, 0)
+        );
         assert!(outcome.delta.changes.iter().any(|change| matches!(
             change,
             StateChange::EntityMoved { entity: changed, from, to }
@@ -538,7 +605,10 @@ mod tests {
             change,
             StateChange::EntityStateChanged { entity: changed, .. } if *changed == entity
         )));
-        assert_eq!(outcome.presentation, vec![PresentationCue::new("test_cast")]);
+        assert_eq!(
+            outcome.presentation,
+            vec![PresentationCue::new("test_cast")]
+        );
         assert_eq!(state.entity(entity).unwrap().position, Position::new(0, 0));
     }
 
@@ -556,13 +626,11 @@ mod tests {
             .unwrap();
         let mut turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
 
-        let result: Result<TransactionResult<()>, CoreError> = turn.apply_transaction(
-            RecordedAction::new("corrupt"),
-            |transaction| {
+        let result: Result<TransactionResult<()>, CoreError> =
+            turn.apply_transaction(RecordedAction::new("corrupt"), |transaction| {
                 transaction.entity_mut(entity)?.position = Position::new(2, 0);
                 Ok(())
-            },
-        );
+            });
 
         assert!(result.is_err());
         assert_eq!(turn.working, state);
@@ -605,7 +673,6 @@ mod tests {
         )));
     }
 
-
     struct TestEntityRule;
 
     impl EntityRule for TestEntityRule {
@@ -624,12 +691,10 @@ mod tests {
             let mut data = StateMap::new();
             data.insert("history_len", history_len as u64);
             data.insert("turn_steps", turn_steps as u64);
-            Ok(EntityPresentation::new(if charged {
-                "test/charged"
-            } else {
-                "test/idle"
-            })
-            .with_data(data))
+            Ok(
+                EntityPresentation::new(if charged { "test/charged" } else { "test/idle" })
+                    .with_data(data),
+            )
         }
     }
 
@@ -660,17 +725,15 @@ mod tests {
         let mut state = sample_state();
         let entity = EntityId::new(40);
         let entity_type = EntityTypeId::new(99);
-        let mut test_entity = EntityState::new(
-            entity,
-            entity_type,
-            PlayerId::new(1),
-            Position::new(1, 1),
-        );
+        let mut test_entity =
+            EntityState::new(entity, entity_type, PlayerId::new(1), Position::new(1, 1));
         test_entity.state.insert("charged", true);
         state.add_entity(test_entity).unwrap();
 
         let mut registry = RuleRegistry::new();
-        registry.register_entity(entity_type, TestEntityRule).unwrap();
+        registry
+            .register_entity(entity_type, TestEntityRule)
+            .unwrap();
 
         let presentation = registry
             .presentation(RuleContext::from_state(&state, None), entity)
@@ -721,7 +784,9 @@ mod tests {
             .unwrap();
 
         let mut registry = RuleRegistry::new();
-        registry.register_entity(entity_type, TestEntityRule).unwrap();
+        registry
+            .register_entity(entity_type, TestEntityRule)
+            .unwrap();
         let presentation = registry
             .presentation(
                 RuleContext::from_turn(&current_turn, Some(timeline.history())),
@@ -781,5 +846,4 @@ mod tests {
             Some(true)
         );
     }
-
 }

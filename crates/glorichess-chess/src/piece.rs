@@ -1,7 +1,7 @@
 use crate::{ChessError, ChessSide};
 use glorichess_core::{
-    EntityId, EntityPresentation, EntityRule, EntityRuleContext, EntityState, EntityTypeId, GameState,
-    Position, RuleError,
+    EntityId, EntityPresentation, EntityRule, EntityRuleContext, EntityState, EntityTypeId,
+    GameState, Position, RuleError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -236,9 +236,8 @@ pub(crate) fn standard_presentation(
         ChessSide::White => "white",
         ChessSide::Black => "black",
     };
-    Ok(EntityPresentation::new(format!(
-        "chess/{side_name}/{}",
-        kind.name()
-    ))
-    .with_label(kind.name()))
+    Ok(
+        EntityPresentation::new(format!("chess/{side_name}/{}", kind.name()))
+            .with_label(kind.name()),
+    )
 }

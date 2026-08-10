@@ -1,8 +1,10 @@
 use crate::{
-    ray_attacks, ray_moves, standard_presentation, ChessError, ChessPieceContext, ChessPieceKind,
-    ChessPieceRule, PseudoMove, QUEEN,
+    piece::{ray_attacks, ray_moves, standard_presentation},
+    ChessError, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, QUEEN,
 };
-use glorichess_core::{EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError};
+use glorichess_core::{
+    EntityPresentation, EntityRule, EntityRuleContext, EntityTypeId, Position, RuleError,
+};
 
 const DIRECTIONS: [(i16, i16); 8] = [
     (1, 0),

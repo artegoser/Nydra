@@ -129,10 +129,8 @@ pub enum RuleError {
 /// Generic behavior attached to an entity type. Game-specific crates may add
 /// richer traits on top of this one without teaching core those concepts.
 pub trait EntityRule {
-    fn presentation(
-        &self,
-        context: EntityRuleContext<'_>,
-    ) -> Result<EntityPresentation, RuleError>;
+    fn presentation(&self, context: EntityRuleContext<'_>)
+        -> Result<EntityPresentation, RuleError>;
 
     fn choices(
         &self,
@@ -224,11 +222,7 @@ impl RuleRegistry {
             .presentation(entity_context)
     }
 
-    pub fn register_ability<R>(
-        &mut self,
-        ability: AbilityId,
-        rule: R,
-    ) -> Result<(), RuleError>
+    pub fn register_ability<R>(&mut self, ability: AbilityId, rule: R) -> Result<(), RuleError>
     where
         R: AbilityRule + 'static,
     {

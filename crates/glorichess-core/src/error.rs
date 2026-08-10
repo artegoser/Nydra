@@ -10,7 +10,10 @@ pub enum CoreError {
     #[error("position {0} is outside the board")]
     PositionOutOfBounds(Position),
     #[error("position {position} is occupied by entity {entity}")]
-    PositionOccupied { position: Position, entity: EntityId },
+    PositionOccupied {
+        position: Position,
+        entity: EntityId,
+    },
     #[error("entity {0} does not exist")]
     EntityNotFound(EntityId),
     #[error("player {0} does not exist")]
@@ -28,9 +31,15 @@ pub enum CoreError {
     #[error("board storage length does not match its dimensions")]
     InvalidBoardStorage,
     #[error("entity {entity} is not stored at its declared position {position}")]
-    EntityPlacementMismatch { entity: EntityId, position: Position },
+    EntityPlacementMismatch {
+        entity: EntityId,
+        position: Position,
+    },
     #[error("board contains unknown entity {entity} at {position}")]
-    DanglingBoardEntity { entity: EntityId, position: Position },
+    DanglingBoardEntity {
+        entity: EntityId,
+        position: Position,
+    },
     #[error("entity {entity} appears on the board at {actual} but declares {declared}")]
     BoardEntityPositionMismatch {
         entity: EntityId,

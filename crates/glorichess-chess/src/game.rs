@@ -175,7 +175,8 @@ impl ChessRules {
         entity: EntityId,
     ) -> Result<Vec<Position>, ChessError> {
         let context = ChessPieceContext::new(state, entity)?;
-        self.piece_rule(context.entity().entity_type)?.attacks(context)
+        self.piece_rule(context.entity().entity_type)?
+            .attacks(context)
     }
 }
 
