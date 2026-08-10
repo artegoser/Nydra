@@ -3,12 +3,14 @@
 
 mod board;
 mod error;
+mod history;
 mod ids;
 mod state;
 mod value;
 
 pub use board::{Board, Position};
 pub use error::CoreError;
+pub use history::{GameTimeline, History, RecordedAction, StepRecord, TurnRecord, TurnSession};
 pub use ids::{AbilityId, ChoiceId, EntityId, EntityTypeId, PlayerId, TeamId};
 pub use state::{
     EntityData, EntityState, EntityStore, GameState, PlayerData, PlayerState, PlayerStore,
@@ -144,5 +146,100 @@ mod tests {
             state.set_active_players(vec![player, player]),
             Err(CoreError::DuplicateActivePlayer(player))
         );
+    }
+
+    #[test]
+    fn turn_session_records_multiple_steps_from_updated_state() {
+        let mut state = sample_state();
+        let entity = EntityId::new(7);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(3),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+
+        let mut turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+        turn.apply_step(RecordedAction::new("move-1"), |state| {
+            state.move_entity(entity, Position::new(1, 0))
+        })
+        .unwrap();
+        turn.apply_step(RecordedAction::new("move-2"), |state| {
+            assert_eq!(state.entity(entity)?.position, Position::new(1, 0));
+            state.move_entity(entity, Position::new(2, 0))
+        })
+        .unwrap();
+
+        assert_eq!(turn.steps.len(), 2);
+        assert_eq!(turn.working.entity(entity).unwrap().position, Position::new(2, 0));
+        assert_eq!(turn.before.entity(entity).unwrap().position, Position::new(0, 0));
+    }
+
+    #[test]
+    fn speculative_state_never_enters_history() {
+        let state = sample_state();
+        let turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+        let (candidate, ()) = turn
+            .speculate(|state| {
+                state.ruleset_state.insert("speculative", true);
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(candidate.ruleset_state.get("speculative").and_then(StateValue::as_bool), Some(true));
+        assert!(!turn.working.ruleset_state.contains_key("speculative"));
+        assert!(turn.steps.is_empty());
+    }
+
+    #[test]
+    fn timeline_commits_undoes_and_redoes_complete_turns() {
+        let mut state = sample_state();
+        let entity = EntityId::new(7);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(3),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+        let mut timeline = GameTimeline::new(state).unwrap();
+
+        let mut turn = timeline.begin_turn(PlayerId::new(1)).unwrap();
+        turn.apply_step(RecordedAction::new("move"), |state| {
+            state.move_entity(entity, Position::new(1, 0))
+        })
+        .unwrap();
+        timeline.commit_turn(turn).unwrap();
+
+        assert_eq!(timeline.current().entity(entity).unwrap().position, Position::new(1, 0));
+        assert_eq!(timeline.history().len(), 1);
+        assert_eq!(timeline.history().last_step().unwrap().action.kind, "move");
+        assert_eq!(timeline.entity_turns_ago(entity, 1).unwrap().position, Position::new(0, 0));
+
+        timeline.undo().unwrap();
+        assert_eq!(timeline.current().entity(entity).unwrap().position, Position::new(0, 0));
+        assert!(timeline.can_redo());
+
+        timeline.redo().unwrap();
+        assert_eq!(timeline.current().entity(entity).unwrap().position, Position::new(1, 0));
+        assert_eq!(timeline.history().len(), 1);
+    }
+
+    #[test]
+    fn rolling_back_a_turn_returns_the_original_snapshot() {
+        let state = sample_state();
+        let mut turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+        turn.apply_step(RecordedAction::new("state-change"), |state| {
+            state.ruleset_state.insert("changed", true);
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(turn.working.ruleset_state.get("changed").and_then(StateValue::as_bool), Some(true));
+        let rolled_back = turn.rollback();
+        assert_eq!(rolled_back, state);
     }
 }

@@ -37,4 +37,8 @@ pub enum CoreError {
         actual: Position,
         declared: Position,
     },
+    #[error("turn session was created from a different committed state")]
+    TurnStateMismatch,
+    #[error("turn actor {0} does not exist")]
+    TurnActorNotFound(PlayerId),
 }

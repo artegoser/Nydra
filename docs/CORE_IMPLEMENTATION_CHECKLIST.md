@@ -59,22 +59,22 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 2 — History and turn sessions
 
-- [ ] Implement full `GameState` snapshots.
-- [ ] Implement `History`.
-- [ ] Implement `TurnRecord`.
-- [ ] Implement `StepRecord`.
-- [ ] Implement `TurnSession` with `before` and mutable `working` state.
-- [ ] Record multiple steps inside one turn.
-- [ ] Implement turn commit.
-- [ ] Implement turn rollback/cancel.
-- [ ] Add `previous_turn()` history query.
-- [ ] Add `last_step()` history query.
-- [ ] Add state-at-turn/history queries.
-- [ ] Add entity-at-history queries.
-- [ ] Ensure speculative legality checks do not enter history.
-- [ ] Implement undo foundation.
-- [ ] Implement redo foundation.
-- [ ] Test snapshot/history integrity across multi-step turns.
+- [x] Implement full `GameState` snapshots.
+- [x] Implement `History`.
+- [x] Implement `TurnRecord`.
+- [x] Implement `StepRecord`.
+- [x] Implement `TurnSession` with `before` and mutable `working` state.
+- [x] Record multiple steps inside one turn.
+- [x] Implement turn commit.
+- [x] Implement turn rollback/cancel.
+- [x] Add `previous_turn()` history query.
+- [x] Add `last_step()` history query.
+- [x] Add state-at-turn/history queries.
+- [x] Add entity-at-history queries.
+- [x] Ensure speculative legality checks do not enter history.
+- [x] Implement undo foundation.
+- [x] Implement redo foundation.
+- [x] Test snapshot/history integrity across multi-step turns.
 
 ## Phase 3 — Generic interaction protocol
 
