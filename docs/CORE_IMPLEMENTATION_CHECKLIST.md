@@ -236,21 +236,22 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 9 — Chess outcomes and draw rules
 
-- [ ] Detect checkmate.
-- [ ] Detect stalemate.
-- [ ] Add resignation outcome/API.
-- [ ] Add draw-by-agreement outcome/API.
-- [ ] Build a repetition-equivalence position key.
-- [ ] Include side to move in repetition equivalence.
-- [ ] Include effective castling possibilities in repetition equivalence.
-- [ ] Include effective en-passant possibilities in repetition equivalence.
-- [ ] Detect claimable threefold repetition.
-- [ ] Detect automatic fivefold repetition.
-- [ ] Track/reset the halfmove clock semantics needed for draw rules.
-- [ ] Detect claimable fifty-move rule.
-- [ ] Detect automatic seventy-five-move rule.
-- [ ] Implement dead-position detection.
-- [ ] Ensure checkmate takes precedence where required over automatic move-count draw handling.
+- [x] Detect checkmate.
+- [x] Detect stalemate.
+- [x] Add resignation outcome/API.
+- [x] Add draw-by-agreement outcome/API.
+- [x] Build a repetition-equivalence position key.
+- [x] Include side to move in repetition equivalence.
+- [x] Include effective castling possibilities in repetition equivalence.
+- [x] Include effective en-passant possibilities in repetition equivalence.
+- [x] Detect claimable threefold repetition.
+- [x] Detect automatic fivefold repetition.
+- [x] Track/reset the halfmove clock semantics needed for draw rules.
+- [x] Detect claimable fifty-move rule.
+- [x] Detect automatic seventy-five-move rule.
+- [x] Implement dead-position detection for standard material-dead classes (K vs K, K+B/K+N vs K, same-color bishops only).
+- [ ] Exhaustive recognition of arbitrary dead positions with blocked material/pawns; this requires reachability search and is intentionally deferred from the hot-path rules runtime.
+- [x] Ensure checkmate takes precedence where required over automatic move-count draw handling.
 
 ## Phase 10 — FEN
 

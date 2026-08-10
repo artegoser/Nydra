@@ -4,6 +4,7 @@
 mod error;
 mod game;
 mod interaction;
+mod outcome;
 mod piece;
 mod pieces;
 
@@ -13,6 +14,7 @@ pub use game::{
     WHITE_TEAM,
 };
 pub use interaction::ChessInteractionRules;
+pub use outcome::{ChessDrawClaim, ChessOutcome, ChessStatus, PositionKey};
 pub use piece::{
     ChessMoveKind, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP, KING, KNIGHT, PAWN,
     QUEEN, ROOK,
@@ -657,6 +659,270 @@ mod tests {
         rules.execute_move(&mut turn, None, movement, Some(BISHOP)).unwrap();
         assert!(turn.working.entities.get(&victim).is_none());
         assert_eq!(turn.working.entity(pawn).unwrap().entity_type, BISHOP);
+    }
+
+    fn commit_to(
+        timeline: &mut glorichess_core::GameTimeline,
+        rules: &ChessRules,
+        entity: EntityId,
+        to: Position,
+    ) {
+        let actor = timeline.current().turn.active_players[0];
+        let mut turn = timeline.begin_turn(actor).unwrap();
+        let movement = rules
+            .legal_moves_with_history(&turn.working, Some(timeline.history()), entity)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == to)
+            .unwrap();
+        rules
+            .execute_move(&mut turn, Some(timeline.history()), movement, None)
+            .unwrap();
+        timeline.commit_turn(turn).unwrap();
+    }
+
+    #[test]
+    fn status_detects_checkmate_and_stalemate() {
+        use glorichess_core::History;
+
+        let rules = ChessRules::standard();
+        let history = History::default();
+
+        let mut mate = empty_chess_state().unwrap();
+        add_piece(&mut mate, 1, KING, ChessSide::White, Position::new(5, 5));
+        add_piece(&mut mate, 2, QUEEN, ChessSide::White, Position::new(6, 6));
+        add_piece(&mut mate, 3, KING, ChessSide::Black, Position::new(7, 7));
+        mate.set_active_players(vec![BLACK_PLAYER]).unwrap();
+        let status = rules.status(&mate, &history).unwrap();
+        assert!(status.in_check);
+        assert_eq!(
+            status.outcome,
+            Some(ChessOutcome::Checkmate {
+                winner: WHITE_PLAYER,
+                loser: BLACK_PLAYER,
+            })
+        );
+
+        let mut stalemate = empty_chess_state().unwrap();
+        add_piece(&mut stalemate, 1, KING, ChessSide::White, Position::new(5, 6));
+        add_piece(&mut stalemate, 2, QUEEN, ChessSide::White, Position::new(6, 5));
+        add_piece(&mut stalemate, 3, KING, ChessSide::Black, Position::new(7, 7));
+        stalemate.set_active_players(vec![BLACK_PLAYER]).unwrap();
+        let status = rules.status(&stalemate, &history).unwrap();
+        assert!(!status.in_check);
+        assert_eq!(status.outcome, Some(ChessOutcome::Stalemate));
+    }
+
+    #[test]
+    fn resignation_and_draw_agreement_are_persistent_terminal_outcomes() {
+        use glorichess_core::History;
+
+        let rules = ChessRules::standard();
+        let history = History::default();
+        let mut resignation = standard_chess_state().unwrap();
+        assert_eq!(
+            rules.resign(&mut resignation, WHITE_PLAYER).unwrap(),
+            ChessOutcome::Resignation {
+                winner: BLACK_PLAYER,
+                loser: WHITE_PLAYER,
+            }
+        );
+        assert_eq!(
+            rules.status(&resignation, &history).unwrap().outcome,
+            Some(ChessOutcome::Resignation {
+                winner: BLACK_PLAYER,
+                loser: WHITE_PLAYER,
+            })
+        );
+
+        let mut agreement = standard_chess_state().unwrap();
+        assert_eq!(rules.agree_draw(&mut agreement), ChessOutcome::DrawAgreement);
+        assert_eq!(
+            rules.status(&agreement, &history).unwrap().outcome,
+            Some(ChessOutcome::DrawAgreement)
+        );
+    }
+
+    #[test]
+    fn repetition_key_tracks_side_castling_and_effective_en_passant() {
+        use glorichess_core::{GameTimeline, History};
+
+        let rules = ChessRules::standard();
+        let mut with_rights = empty_chess_state().unwrap();
+        add_piece(&mut with_rights, 1, KING, ChessSide::White, Position::new(4, 0));
+        let rook = add_piece(&mut with_rights, 2, ROOK, ChessSide::White, Position::new(7, 0));
+        add_piece(&mut with_rights, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let no_history = History::default();
+        let key_with_rights = rules.position_key(&with_rights, &no_history).unwrap();
+        let mut without_rights = with_rights.clone();
+        without_rights.entity_mut(rook).unwrap().move_count = 1;
+        let key_without_rights = rules.position_key(&without_rights, &no_history).unwrap();
+        assert_ne!(key_with_rights, key_without_rights);
+
+        let mut black_to_move = with_rights.clone();
+        black_to_move.set_active_players(vec![BLACK_PLAYER]).unwrap();
+        let black_key = rules.position_key(&black_to_move, &no_history).unwrap();
+        assert_ne!(key_with_rights, black_key);
+
+        let mut ep_state = empty_chess_state().unwrap();
+        add_piece(&mut ep_state, 10, KING, ChessSide::White, Position::new(4, 0));
+        add_piece(&mut ep_state, 11, PAWN, ChessSide::White, Position::new(4, 4));
+        add_piece(&mut ep_state, 12, KING, ChessSide::Black, Position::new(4, 7));
+        let black_pawn = add_piece(&mut ep_state, 13, PAWN, ChessSide::Black, Position::new(3, 6));
+        ep_state.set_active_players(vec![BLACK_PLAYER]).unwrap();
+        let mut timeline = GameTimeline::new(ep_state).unwrap();
+        commit_to(&mut timeline, &rules, black_pawn, Position::new(3, 4));
+        let with_ep = rules.position_key(timeline.current(), timeline.history()).unwrap();
+        let without_ep = rules.position_key(timeline.current(), &History::default()).unwrap();
+        assert_ne!(with_ep, without_ep);
+    }
+
+    #[test]
+    fn threefold_is_claimable_and_fivefold_is_automatic() {
+        use glorichess_core::GameTimeline;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let white_knight = add_piece(&mut state, 2, KNIGHT, ChessSide::White, Position::new(1, 0));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let black_knight = add_piece(&mut state, 4, KNIGHT, ChessSide::Black, Position::new(1, 7));
+        let mut timeline = GameTimeline::new(state).unwrap();
+
+        for _ in 0..2 {
+            commit_to(&mut timeline, &rules, white_knight, Position::new(2, 2));
+            commit_to(&mut timeline, &rules, black_knight, Position::new(2, 5));
+            commit_to(&mut timeline, &rules, white_knight, Position::new(1, 0));
+            commit_to(&mut timeline, &rules, black_knight, Position::new(1, 7));
+        }
+        let status = rules.status(timeline.current(), timeline.history()).unwrap();
+        assert_eq!(status.repetition_count, 3);
+        assert!(status.can_claim_threefold_repetition);
+        assert_eq!(status.outcome, None);
+
+        let mut claimed = timeline.current().clone();
+        assert_eq!(
+            rules
+                .claim_draw(
+                    &mut claimed,
+                    timeline.history(),
+                    ChessDrawClaim::ThreefoldRepetition,
+                )
+                .unwrap(),
+            ChessOutcome::ThreefoldRepetition
+        );
+
+        for _ in 0..2 {
+            commit_to(&mut timeline, &rules, white_knight, Position::new(2, 2));
+            commit_to(&mut timeline, &rules, black_knight, Position::new(2, 5));
+            commit_to(&mut timeline, &rules, white_knight, Position::new(1, 0));
+            commit_to(&mut timeline, &rules, black_knight, Position::new(1, 7));
+        }
+        let status = rules.status(timeline.current(), timeline.history()).unwrap();
+        assert_eq!(status.repetition_count, 5);
+        assert_eq!(status.outcome, Some(ChessOutcome::FivefoldRepetition));
+    }
+
+    #[test]
+    fn halfmove_clock_resets_and_fifty_seventy_five_rules_are_exposed() {
+        use glorichess_core::{History, TurnSession};
+
+        let rules = ChessRules::standard();
+        let history = History::default();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let white_knight = add_piece(&mut state, 2, KNIGHT, ChessSide::White, Position::new(1, 0));
+        let white_pawn = add_piece(&mut state, 3, PAWN, ChessSide::White, Position::new(0, 1));
+        add_piece(&mut state, 4, KING, ChessSide::Black, Position::new(4, 7));
+        add_piece(&mut state, 5, PAWN, ChessSide::Black, Position::new(0, 6));
+
+        let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        let movement = rules
+            .legal_moves(&turn.working, white_knight)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(2, 2))
+            .unwrap();
+        rules.execute_move(&mut turn, None, movement, None).unwrap();
+        assert_eq!(rules.halfmove_clock(&turn.working), 1);
+
+        let mut pawn_state = state.clone();
+        rules.set_halfmove_clock(&mut pawn_state, 99);
+        let mut turn = TurnSession::new(&pawn_state, WHITE_PLAYER).unwrap();
+        let movement = rules
+            .legal_moves(&turn.working, white_pawn)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(0, 2))
+            .unwrap();
+        rules.execute_move(&mut turn, None, movement, None).unwrap();
+        assert_eq!(rules.halfmove_clock(&turn.working), 0);
+
+        let mut threshold = state.clone();
+        rules.set_halfmove_clock(&mut threshold, 100);
+        let status = rules.status(&threshold, &history).unwrap();
+        assert!(status.can_claim_fifty_move_rule);
+        assert_eq!(status.outcome, None);
+        let mut claimed = threshold.clone();
+        assert_eq!(
+            rules
+                .claim_draw(&mut claimed, &history, ChessDrawClaim::FiftyMoveRule)
+                .unwrap(),
+            ChessOutcome::FiftyMoveRule
+        );
+        rules.set_halfmove_clock(&mut threshold, 150);
+        assert_eq!(
+            rules.status(&threshold, &history).unwrap().outcome,
+            Some(ChessOutcome::SeventyFiveMoveRule)
+        );
+    }
+
+    #[test]
+    fn capture_resets_halfmove_clock() {
+        use glorichess_core::TurnSession;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let rook = add_piece(&mut state, 2, ROOK, ChessSide::White, Position::new(0, 0));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        add_piece(&mut state, 4, KNIGHT, ChessSide::Black, Position::new(0, 7));
+        rules.set_halfmove_clock(&mut state, 99);
+        let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        let capture = rules
+            .legal_moves(&turn.working, rook)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(0, 7))
+            .unwrap();
+        rules.execute_move(&mut turn, None, capture, None).unwrap();
+        assert_eq!(rules.halfmove_clock(&turn.working), 0);
+    }
+
+    #[test]
+    fn dead_positions_are_automatic_and_checkmate_precedes_75_move_rule() {
+        use glorichess_core::History;
+
+        let rules = ChessRules::standard();
+        let history = History::default();
+        let mut dead = empty_chess_state().unwrap();
+        add_piece(&mut dead, 1, KING, ChessSide::White, Position::new(0, 0));
+        add_piece(&mut dead, 2, KING, ChessSide::Black, Position::new(7, 7));
+        assert_eq!(
+            rules.status(&dead, &history).unwrap().outcome,
+            Some(ChessOutcome::DeadPosition)
+        );
+
+        let mut mate = empty_chess_state().unwrap();
+        add_piece(&mut mate, 1, KING, ChessSide::White, Position::new(5, 5));
+        add_piece(&mut mate, 2, QUEEN, ChessSide::White, Position::new(6, 6));
+        add_piece(&mut mate, 3, KING, ChessSide::Black, Position::new(7, 7));
+        mate.set_active_players(vec![BLACK_PLAYER]).unwrap();
+        rules.set_halfmove_clock(&mut mate, 150);
+        assert!(matches!(
+            rules.status(&mate, &history).unwrap().outcome,
+            Some(ChessOutcome::Checkmate { .. })
+        ));
     }
 
 }

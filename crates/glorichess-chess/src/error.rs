@@ -31,4 +31,12 @@ pub enum ChessError {
     InvalidPromotion(EntityTypeId),
     #[error("entity {0} cannot promote on this move")]
     UnexpectedPromotion(EntityId),
+    #[error("standard chess requires exactly one active player")]
+    InvalidTurnState,
+    #[error("the requested draw claim is not currently valid")]
+    InvalidDrawClaim,
+    #[error("stored chess outcome state is invalid")]
+    InvalidOutcomeState,
+    #[error("the chess game is already finished")]
+    GameFinished,
 }

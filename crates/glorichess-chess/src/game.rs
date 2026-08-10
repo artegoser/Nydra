@@ -319,6 +319,11 @@ impl ChessRules {
         movement: PseudoMove,
         promotion: Option<EntityTypeId>,
     ) -> Result<(), ChessError> {
+        let empty_history = History::default();
+        let status_history = history.unwrap_or(&empty_history);
+        if self.status(&turn.working, status_history)?.outcome.is_some() {
+            return Err(ChessError::GameFinished);
+        }
         let actor = turn.working.entity(movement.actor)?;
         let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
         let legal = self.legal_moves_with_history(&turn.working, history, movement.actor)?;
@@ -376,6 +381,8 @@ impl ChessRules {
     ) -> Result<(), ChessError> {
         let actor = state.entity(movement.actor)?;
         let side = ChessSide::from_player(actor.owner).ok_or(ChessError::UnknownSide(actor.owner))?;
+        let actor_type = actor.entity_type;
+        let is_capture = movement.capture.is_some();
         if actor.position != movement.from {
             return Err(ChessError::StaleMove(movement.actor));
         }
@@ -401,6 +408,7 @@ impl ChessRules {
             state.entity_mut(movement.actor)?.entity_type = promote_to;
         }
         if advance_turn {
+            self.update_halfmove_clock_for_move(state, actor_type, is_capture);
             state.set_active_players(vec![side.opponent().player()])?;
         }
         Ok(())

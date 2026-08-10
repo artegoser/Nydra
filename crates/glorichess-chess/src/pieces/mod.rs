@@ -1,7 +1,7 @@
 mod bishop;
 pub(crate) mod king;
 mod knight;
-mod pawn;
+pub(crate) mod pawn;
 mod queen;
 mod rook;
 

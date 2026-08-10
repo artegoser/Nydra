@@ -114,6 +114,11 @@ impl InteractionRules for ChessInteractionRules<'_> {
         draft: &StateMap,
     ) -> Result<Vec<ChoiceSpec>, InteractionError> {
         let side = self.side_to_move(turn)?;
+        let empty_history = History::default();
+        let history = self.history.unwrap_or(&empty_history);
+        if self.rules.status(&turn.working, history).map_err(Self::rule_error)?.outcome.is_some() {
+            return Ok(Vec::new());
+        }
 
         if Self::pending_target(draft).is_some() {
             return Ok(vec![
