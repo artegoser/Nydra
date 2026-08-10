@@ -1,4 +1,7 @@
-use crate::{CoreError, EntityId, EntityState, GameState, PlayerId, StateMap};
+use crate::{
+    CoreError, EntityId, EntityState, GameState, PlayerId, PresentationCue, StateDelta, StateMap,
+    Transaction,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -21,6 +24,8 @@ pub struct StepRecord {
     pub before: GameState,
     pub after: GameState,
     pub action: RecordedAction,
+    pub delta: StateDelta,
+    pub presentation: Vec<PresentationCue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -86,6 +91,14 @@ impl History {
     }
 }
 
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionResult<T> {
+    pub value: T,
+    pub delta: StateDelta,
+    pub presentation: Vec<PresentationCue>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TurnSession {
     pub actor: PlayerId,
@@ -112,18 +125,39 @@ impl TurnSession {
         action: RecordedAction,
         operation: impl FnOnce(&mut GameState) -> Result<T, CoreError>,
     ) -> Result<T, CoreError> {
-        let before = self.working.clone();
-        let mut candidate = before.clone();
-        let value = operation(&mut candidate)?;
-        candidate.validate()?;
+        let result = self.apply_transaction(action, |transaction| {
+            operation(transaction.raw_state_mut())
+        })?;
+        Ok(result.value)
+    }
 
-        self.working = candidate.clone();
+    pub fn apply_transaction<T, E>(
+        &mut self,
+        action: RecordedAction,
+        operation: impl FnOnce(&mut Transaction) -> Result<T, E>,
+    ) -> Result<TransactionResult<T>, E>
+    where
+        E: From<CoreError>,
+    {
+        let before = self.working.clone();
+        let mut transaction = Transaction::new(&before);
+        let value = operation(&mut transaction)?;
+        let outcome = transaction.finish().map_err(E::from)?;
+
+        self.working = outcome.state.clone();
         self.steps.push(StepRecord {
             before,
-            after: candidate,
+            after: outcome.state,
             action,
+            delta: outcome.delta.clone(),
+            presentation: outcome.presentation.clone(),
         });
-        Ok(value)
+
+        Ok(TransactionResult {
+            value,
+            delta: outcome.delta,
+            presentation: outcome.presentation,
+        })
     }
 
     /// Creates a validated candidate state without recording it as a real step.

@@ -7,11 +7,14 @@ mod history;
 mod interaction;
 mod ids;
 mod state;
+mod transaction;
 mod value;
 
 pub use board::{Board, Position};
 pub use error::CoreError;
-pub use history::{GameTimeline, History, RecordedAction, StepRecord, TurnRecord, TurnSession};
+pub use history::{
+    GameTimeline, History, RecordedAction, StepRecord, TransactionResult, TurnRecord, TurnSession,
+};
 pub use interaction::{
     recorded_step, Choice, ChoiceIssuer, ChoiceKind, ChoiceSpec, Interaction, InteractionDriver,
     InteractionError, InteractionFlow, InteractionRules, InteractionUpdate,
@@ -20,6 +23,9 @@ pub use ids::{AbilityId, ChoiceId, EntityId, EntityTypeId, PlayerId, TeamId};
 pub use state::{
     EntityData, EntityState, EntityStore, GameState, PlayerData, PlayerState, PlayerStore,
     RulesetState, TeamData, TeamState, TeamStore, TurnData, TurnState,
+};
+pub use transaction::{
+    PresentationCue, StateChange, StateDelta, Transaction, TransactionOutcome,
 };
 pub use value::{StateMap, StateValue};
 
@@ -483,6 +489,115 @@ mod tests {
             driver.choose(stale),
             Err(InteractionError::StaleOrInvalidChoice(stale))
         );
+    }
+
+
+    #[test]
+    fn transaction_traces_structural_changes_and_presentation() {
+        let mut state = sample_state();
+        let entity = EntityId::new(7);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(3),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+
+        let mut transaction = Transaction::new(&state);
+        transaction
+            .move_entity(entity, Position::new(1, 0))
+            .unwrap();
+        transaction.entity_mut(entity).unwrap().entity_type = EntityTypeId::new(4);
+        transaction.entity_mut(entity).unwrap().state.insert("health", 80_u32);
+        transaction.present(PresentationCue::new("test_cast"));
+        let outcome = transaction.finish().unwrap();
+
+        assert_eq!(outcome.state.entity(entity).unwrap().position, Position::new(1, 0));
+        assert!(outcome.delta.changes.iter().any(|change| matches!(
+            change,
+            StateChange::EntityMoved { entity: changed, from, to }
+                if *changed == entity
+                    && *from == Position::new(0, 0)
+                    && *to == Position::new(1, 0)
+        )));
+        assert!(outcome.delta.changes.iter().any(|change| matches!(
+            change,
+            StateChange::EntityTypeChanged { entity: changed, from, to }
+                if *changed == entity
+                    && *from == EntityTypeId::new(3)
+                    && *to == EntityTypeId::new(4)
+        )));
+        assert!(outcome.delta.changes.iter().any(|change| matches!(
+            change,
+            StateChange::EntityStateChanged { entity: changed, .. } if *changed == entity
+        )));
+        assert_eq!(outcome.presentation, vec![PresentationCue::new("test_cast")]);
+        assert_eq!(state.entity(entity).unwrap().position, Position::new(0, 0));
+    }
+
+    #[test]
+    fn invalid_transaction_never_changes_turn_working_state() {
+        let mut state = sample_state();
+        let entity = EntityId::new(7);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(3),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+        let mut turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+
+        let result: Result<TransactionResult<()>, CoreError> = turn.apply_transaction(
+            RecordedAction::new("corrupt"),
+            |transaction| {
+                transaction.entity_mut(entity)?.position = Position::new(2, 0);
+                Ok(())
+            },
+        );
+
+        assert!(result.is_err());
+        assert_eq!(turn.working, state);
+        assert!(turn.steps.is_empty());
+    }
+
+    #[test]
+    fn transaction_traces_spawn_and_remove() {
+        let mut state = sample_state();
+        let removed = EntityId::new(7);
+        state
+            .add_entity(EntityState::new(
+                removed,
+                EntityTypeId::new(3),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+        let added = EntityId::new(8);
+
+        let mut transaction = Transaction::new(&state);
+        transaction.remove_entity(removed).unwrap();
+        transaction
+            .spawn_entity(EntityState::new(
+                added,
+                EntityTypeId::new(4),
+                PlayerId::new(2),
+                Position::new(3, 3),
+            ))
+            .unwrap();
+        let outcome = transaction.finish().unwrap();
+
+        assert!(outcome.delta.changes.iter().any(|change| matches!(
+            change,
+            StateChange::EntityRemoved { entity } if entity.id == removed
+        )));
+        assert!(outcome.delta.changes.iter().any(|change| matches!(
+            change,
+            StateChange::EntityAdded { entity } if entity.id == added
+        )));
     }
 
 }

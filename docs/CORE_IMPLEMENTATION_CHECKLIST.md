@@ -93,22 +93,22 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 4 — Transactional mutation and change tracing
 
-- [ ] Implement transactional working-state mutation.
-- [ ] Provide safe entity lookup/mutation helpers.
-- [ ] Provide move helper.
-- [ ] Provide spawn helper.
-- [ ] Provide remove helper.
-- [ ] Provide player/team/ruleset-state mutation access where permitted.
-- [ ] Define controlled raw-state mutation escape hatch.
-- [ ] Validate transaction before committing a step.
-- [ ] Compute or record structural before/after state changes.
-- [ ] Trace entity movement.
-- [ ] Trace entity addition/removal.
-- [ ] Trace entity type changes.
-- [ ] Trace custom entity-state changes.
-- [ ] Add optional presentation-cue channel.
-- [ ] Ensure presentation data cannot alter authoritative state.
-- [ ] Test rollback on invalid mutations.
+- [x] Implement transactional working-state mutation.
+- [x] Provide safe entity lookup/mutation helpers.
+- [x] Provide move helper.
+- [x] Provide spawn helper.
+- [x] Provide remove helper.
+- [x] Provide player/team/ruleset-state mutation access where permitted.
+- [x] Define controlled raw-state mutation escape hatch.
+- [x] Validate transaction before committing a step.
+- [x] Compute or record structural before/after state changes.
+- [x] Trace entity movement.
+- [x] Trace entity addition/removal.
+- [x] Trace entity type changes.
+- [x] Trace custom entity-state changes.
+- [x] Add optional presentation-cue channel.
+- [x] Ensure presentation data cannot alter authoritative state.
+- [x] Test rollback on invalid mutations.
 
 ## Phase 5 — Rules and presentation registration
 
