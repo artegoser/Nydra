@@ -409,6 +409,10 @@ impl ChessRules {
         }
         if advance_turn {
             self.update_halfmove_clock_for_move(state, actor_type, is_capture);
+            if side == ChessSide::Black {
+                let next_fullmove = self.fullmove_number(state).saturating_add(1);
+                self.set_fullmove_number(state, next_fullmove);
+            }
             state.set_active_players(vec![side.opponent().player()])?;
         }
         Ok(())

@@ -3,6 +3,8 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
 pub enum ChessError {
+    #[error("invalid FEN: {0}")]
+    InvalidFen(String),
     #[error(transparent)]
     Core(#[from] CoreError),
     #[error("player {0} is not a standard chess side")]

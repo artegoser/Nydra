@@ -8,6 +8,7 @@ use glorichess_core::{
 use serde::{Deserialize, Serialize};
 
 const HALF_MOVE_CLOCK: &str = "chess.halfmove_clock";
+pub(crate) const FULL_MOVE_NUMBER: &str = "chess.fullmove_number";
 const EXPLICIT_OUTCOME: &str = "chess.outcome";
 const EXPLICIT_WINNER: &str = "chess.outcome_winner";
 const EXPLICIT_LOSER: &str = "chess.outcome_loser";
@@ -78,6 +79,22 @@ impl ChessRules {
 
     pub fn set_halfmove_clock(&self, state: &mut GameState, value: u16) {
         state.ruleset_state.insert(HALF_MOVE_CLOCK, u64::from(value));
+    }
+
+    pub fn fullmove_number(&self, state: &GameState) -> u32 {
+        state
+            .ruleset_state
+            .get(FULL_MOVE_NUMBER)
+            .and_then(StateValue::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(1)
+    }
+
+    pub fn set_fullmove_number(&self, state: &mut GameState, value: u32) {
+        state
+            .ruleset_state
+            .insert(FULL_MOVE_NUMBER, u64::from(value.max(1)));
     }
 
     pub fn status(&self, state: &GameState, history: &History) -> Result<ChessStatus, ChessError> {
@@ -261,7 +278,7 @@ impl ChessRules {
         })
     }
 
-    fn effective_castling_rights(&self, state: &GameState) -> u8 {
+    pub(crate) fn effective_castling_rights(&self, state: &GameState) -> u8 {
         let mut rights = 0_u8;
         for (side, king_side_bit, queen_side_bit) in [
             (ChessSide::White, 0b0001, 0b0010),

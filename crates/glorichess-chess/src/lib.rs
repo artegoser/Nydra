@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 mod error;
+mod fen;
 mod game;
 mod interaction;
 mod outcome;
@@ -9,6 +10,7 @@ mod piece;
 mod pieces;
 
 pub use error::ChessError;
+pub use fen::FenGame;
 pub use game::{
     empty_chess_state, standard_chess_state, ChessRules, BLACK_PLAYER, BLACK_TEAM, WHITE_PLAYER,
     WHITE_TEAM,

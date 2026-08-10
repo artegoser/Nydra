@@ -256,20 +256,20 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 ## Phase 10 — FEN
 
 - [ ] Remove TypeScript FEN authority.
-- [ ] Parse piece placement in Rust.
-- [ ] Parse side to move.
-- [ ] Parse castling field.
-- [ ] Parse en-passant target field.
-- [ ] Parse halfmove clock.
-- [ ] Parse fullmove number.
-- [ ] Serialize complete FEN.
-- [ ] Reconstruct movement metadata consistent with imported castling rights.
-- [ ] Ensure absent castling rights do not accidentally reappear from original-piece placement.
-- [ ] Synthesize minimal previous pawn state/action for imported en-passant target semantics.
-- [ ] Keep synthetic import history clearly distinct from known real history internally if needed.
-- [ ] Add FEN validation/errors.
-- [ ] Add FEN roundtrip tests.
-- [ ] Add imported castling/en-passant continuation tests.
+- [x] Parse piece placement in Rust.
+- [x] Parse side to move.
+- [x] Parse castling field.
+- [x] Parse en-passant target field.
+- [x] Parse halfmove clock.
+- [x] Parse fullmove number.
+- [x] Serialize complete FEN.
+- [x] Reconstruct movement metadata consistent with imported castling rights.
+- [x] Ensure absent castling rights do not accidentally reappear from original-piece placement.
+- [x] Synthesize minimal previous pawn state/action for imported en-passant target semantics.
+- [x] Keep synthetic import history clearly distinct from known real history internally if needed.
+- [x] Add FEN validation/errors.
+- [x] Add FEN roundtrip tests.
+- [x] Add imported castling/en-passant continuation tests.
 
 ## Phase 11 — WASM bridge
 

@@ -34,6 +34,8 @@ pub struct TurnRecord {
     pub before: GameState,
     pub steps: Vec<StepRecord>,
     pub after: GameState,
+    #[serde(default)]
+    pub synthetic: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -104,6 +106,7 @@ pub struct TurnSession {
     pub before: GameState,
     pub working: GameState,
     pub steps: Vec<StepRecord>,
+    synthetic: bool,
 }
 
 impl TurnSession {
@@ -116,7 +119,16 @@ impl TurnSession {
             before: state.clone(),
             working: state.clone(),
             steps: Vec::new(),
+            synthetic: false,
         })
+    }
+
+    pub fn mark_synthetic(&mut self) {
+        self.synthetic = true;
+    }
+
+    pub fn is_synthetic(&self) -> bool {
+        self.synthetic
     }
 
     pub fn apply_step<T>(
@@ -176,6 +188,7 @@ impl TurnSession {
             before: self.before,
             steps: self.steps,
             after: self.working,
+            synthetic: self.synthetic,
         }
     }
 }
