@@ -4,24 +4,24 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Architectural invariants
 
-- [ ] `glorichess-core` contains no chess-specific piece/rule concepts.
-- [ ] Core player identity uses `PlayerId`, not white/black.
-- [ ] Core supports `TeamId` independently from `PlayerId`.
-- [ ] Entities have distinct `owner` and `controller` fields.
-- [ ] Entities have stable IDs and an extensible custom-state mechanism.
-- [ ] Entities expose `move_count` or equivalent persistent movement state.
-- [ ] History is readable by rules, not only by undo code.
+- [x] `glorichess-core` contains no chess-specific piece/rule concepts.
+- [x] Core player identity uses `PlayerId`, not white/black.
+- [x] Core supports `TeamId` independently from `PlayerId`.
+- [x] Entities have distinct `owner` and `controller` fields.
+- [x] Entities have stable IDs and an extensible custom-state mechanism.
+- [x] Entities expose `move_count` or equivalent persistent movement state.
+- [x] History is readable by rules, not only by undo code.
 - [ ] Normal-play en passant is derived from history rather than a global target flag.
 - [ ] Normal-play castling eligibility is derived from entity/current state rather than global castling-right bits.
-- [ ] Piece/rule code can mutate a transactional working game state directly.
-- [ ] Gameplay is not constrained by a closed central `Effect` enum.
-- [ ] Structural state changes are separately exposed for frontend animation/debugging.
-- [ ] Optional semantic presentation cues are non-authoritative.
-- [ ] One player turn may contain multiple sequential steps.
-- [ ] Continuation choices are computed from the updated working state after each step.
+- [x] Piece/rule code can mutate a transactional working game state directly.
+- [x] Gameplay is not constrained by a closed central `Effect` enum.
+- [x] Structural state changes are separately exposed for frontend animation/debugging.
+- [x] Optional semantic presentation cues are non-authoritative.
+- [x] One player turn may contain multiple sequential steps.
+- [x] Continuation choices are computed from the updated working state after each step.
 - [ ] Frontend interaction is driven by Rust-provided choices/opaque IDs.
-- [ ] Chess attack semantics are separate from movement semantics.
-- [ ] Speculative legality states are never committed to history.
+- [x] Chess attack semantics are separate from movement semantics.
+- [x] Speculative legality states are never committed to history.
 
 ## Phase 0 — Repository preparation
 
@@ -127,48 +127,48 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ### Chess setup
 
-- [ ] Define `ChessSide` in `glorichess-chess` only.
-- [ ] Map `ChessSide::White` to a concrete `PlayerId`.
-- [ ] Map `ChessSide::Black` to a concrete `PlayerId`.
-- [ ] Create standard 8×8 chess board setup.
-- [ ] Create standard initial entity placement.
-- [ ] Register all six standard piece rules.
+- [x] Define `ChessSide` in `glorichess-chess` only.
+- [x] Map `ChessSide::White` to a concrete `PlayerId`.
+- [x] Map `ChessSide::Black` to a concrete `PlayerId`.
+- [x] Create standard 8×8 chess board setup.
+- [x] Create standard initial entity placement.
+- [x] Register all six standard piece rules.
 
 ### Pawn
 
-- [ ] Generate one-square forward movement.
-- [ ] Generate legal initial two-square pseudo-movement.
-- [ ] Generate diagonal attacked squares separately from movement.
-- [ ] Generate ordinary diagonal captures.
-- [ ] Respect blocking on forward movement.
+- [x] Generate one-square forward movement.
+- [x] Generate legal initial two-square pseudo-movement.
+- [x] Generate diagonal attacked squares separately from movement.
+- [x] Generate ordinary diagonal captures.
+- [x] Respect blocking on forward movement.
 
 ### Knight
 
-- [ ] Generate all L-shaped pseudo-moves.
-- [ ] Generate knight attacked squares.
-- [ ] Handle friendly/enemy occupancy correctly.
+- [x] Generate all L-shaped pseudo-moves.
+- [x] Generate knight attacked squares.
+- [x] Handle friendly/enemy occupancy correctly.
 
 ### Bishop
 
-- [ ] Generate diagonal rays.
-- [ ] Stop rays correctly at first occupied square.
-- [ ] Generate attacked squares correctly.
+- [x] Generate diagonal rays.
+- [x] Stop rays correctly at first occupied square.
+- [x] Generate attacked squares correctly.
 
 ### Rook
 
-- [ ] Generate orthogonal rays.
-- [ ] Stop rays correctly at first occupied square.
-- [ ] Generate attacked squares correctly.
+- [x] Generate orthogonal rays.
+- [x] Stop rays correctly at first occupied square.
+- [x] Generate attacked squares correctly.
 
 ### Queen
 
-- [ ] Generate combined bishop/rook rays.
-- [ ] Generate attacked squares correctly.
+- [x] Generate combined bishop/rook rays.
+- [x] Generate attacked squares correctly.
 
 ### King
 
-- [ ] Generate adjacent pseudo-moves.
-- [ ] Generate adjacent attacked squares independently from move legality.
+- [x] Generate adjacent pseudo-moves.
+- [x] Generate adjacent attacked squares independently from move legality.
 
 ## Phase 7 — Attack maps and legal chess actions
 
