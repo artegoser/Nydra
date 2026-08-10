@@ -1,0 +1,11 @@
+[package]
+name = "nydra-examples"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+nydra-core.workspace = true
