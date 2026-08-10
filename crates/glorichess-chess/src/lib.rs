@@ -874,6 +874,10 @@ mod tests {
         add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
         let knight = add_piece(&mut state, 2, KNIGHT, ChessSide::White, Position::new(1, 0));
         add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        // K+N vs K is an automatic dead position, so keep unrelated mating material
+        // on the board. This fixture must exercise the game-rule reaction path,
+        // not the terminal-outcome guard.
+        add_piece(&mut state, 4, PAWN, ChessSide::Black, Position::new(0, 6));
         let movement = rules
             .legal_moves(&state, knight)
             .unwrap()
