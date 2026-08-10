@@ -398,7 +398,7 @@ mod tests {
         rules
             .execute_move(&mut white_turn, Some(timeline.history()), ep, None)
             .unwrap();
-        assert!(white_turn.working.entities.get(&black_pawn).is_none());
+        assert!(!white_turn.working.entities.contains_key(&black_pawn));
         assert_eq!(
             white_turn.working.entity(white_pawn).unwrap().position,
             Position::new(3, 5)
@@ -657,7 +657,7 @@ mod tests {
             .unwrap();
         let mut turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
         rules.execute_move(&mut turn, None, movement, Some(BISHOP)).unwrap();
-        assert!(turn.working.entities.get(&victim).is_none());
+        assert!(!turn.working.entities.contains_key(&victim));
         assert_eq!(turn.working.entity(pawn).unwrap().entity_type, BISHOP);
     }
 

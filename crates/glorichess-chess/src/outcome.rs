@@ -187,10 +187,10 @@ impl ChessRules {
                 count += 1;
             }
         }
-        if turns.last().map(|turn| &turn.after) != Some(state) {
-            if self.position_key_after(state, turns.last())? == target {
-                count += 1;
-            }
+        if turns.last().map(|turn| &turn.after) != Some(state)
+            && self.position_key_after(state, turns.last())? == target
+        {
+            count += 1;
         }
         Ok(count)
     }
