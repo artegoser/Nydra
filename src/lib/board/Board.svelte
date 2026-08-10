@@ -4,36 +4,123 @@
 	import Pieces from './Pieces.svelte';
 	import {
 		LocalChessGame,
-		type ChoiceView,
 		type GameView,
+		type HistoryTurnView,
 		type InteractionView,
 		type TransitionView
 	} from '$lib/wasm/runtime';
 
 	let runtime: LocalChessGame | null = null;
 	let game: GameView | null = null;
-	let interaction: InteractionView = { generation: '0', choices: [] };
+	let previousGame: GameView | null = null;
+	let interaction: InteractionView = {
+		generation: '0',
+		selected_entity: null,
+		pending_target: null,
+		choices: []
+	};
+	let latestTransition: TransitionView | null = null;
+	let animationSeq = 0;
+	let history: HistoryTurnView[] = [];
+	let currentFen = '';
+	let fenDraft = '';
+	let orientation: 'white' | 'black' = 'white';
 	let error: string | null = null;
+	let loading = true;
 
-	function applyTransition(transition: TransitionView) {
-		game = transition.game;
-		interaction = transition.interaction;
+	function syncMetadata() {
+		if (!runtime) return;
+		history = runtime.history();
+		currentFen = runtime.fen();
+		if (!fenDraft) fenDraft = currentFen;
 	}
 
-	function choose(choiceId: string) {
-		if (!runtime) return;
+	function applyTransition(transition: TransitionView, animate = true) {
+		previousGame = game;
+		game = transition.game;
+		interaction = transition.interaction;
+		latestTransition = transition;
+		if (animate && transition.changes.length > 0) animationSeq += 1;
+		syncMetadata();
+	}
+
+	function run(action: () => TransitionView, animate = true) {
 		try {
-			applyTransition(runtime.choose(choiceId));
+			applyTransition(action(), animate);
 			error = null;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : String(cause);
 		}
 	}
 
-	$: optionChoices = interaction.choices.filter(
-		(choice): choice is ChoiceView & { option_key: string } =>
-			choice.kind === 'select_option' && choice.option_key != null
-	);
+	function choose(choiceId: string) {
+		if (!runtime) return;
+		run(() => runtime!.choose(choiceId));
+	}
+
+	function cancelSelection() {
+		if (!runtime) return;
+		run(() => runtime!.cancelSelection(), false);
+	}
+
+	function undo() {
+		if (!runtime || !game?.can_undo) return;
+		run(() => runtime!.undo());
+	}
+
+	function redo() {
+		if (!runtime || !game?.can_redo) return;
+		run(() => runtime!.redo());
+	}
+
+	async function installRuntime(next: LocalChessGame) {
+		const old = runtime;
+		runtime = next;
+		previousGame = null;
+		latestTransition = null;
+		game = next.view();
+		interaction = next.interaction();
+		history = next.history();
+		currentFen = next.fen();
+		fenDraft = currentFen;
+		error = null;
+		loading = false;
+		old?.dispose();
+	}
+
+	async function resetGame() {
+		try {
+			loading = true;
+			await installRuntime(await LocalChessGame.create());
+		} catch (cause) {
+			loading = false;
+			error = cause instanceof Error ? cause.message : String(cause);
+		}
+	}
+
+	async function loadFen() {
+		try {
+			loading = true;
+			await installRuntime(await LocalChessGame.fromFen(fenDraft.trim()));
+		} catch (cause) {
+			loading = false;
+			error = cause instanceof Error ? cause.message : String(cause);
+		}
+	}
+
+	async function copyFen() {
+		if (!currentFen || typeof navigator === 'undefined') return;
+		try {
+			await navigator.clipboard.writeText(currentFen);
+		} catch {
+			// Clipboard availability is browser-dependent; the field remains selectable.
+		}
+	}
+
+	function statusText(view: GameView) {
+		if (!view.status.outcome) return `${view.status.side_to_move} to move${view.status.in_check ? ' · check' : ''}`;
+		return view.status.outcome.replaceAll('_', ' ');
+	}
 
 	onMount(() => {
 		let mounted = true;
@@ -43,11 +130,10 @@
 					loaded.dispose();
 					return;
 				}
-				runtime = loaded;
-				game = loaded.view();
-				interaction = loaded.interaction();
+				return installRuntime(loaded);
 			})
 			.catch((cause) => {
+				loading = false;
 				error = cause instanceof Error ? cause.message : String(cause);
 			});
 
@@ -60,32 +146,68 @@
 </script>
 
 {#if game}
-	<div class="board-shell">
-		<div class="board">
-			<Bg width={game.width} height={game.height} />
-			<Pieces {game} {interaction} onchoice={choose} />
-		</div>
-
-		<div class="runtime-state">
-			<span>{game.status.side_to_move} to move</span>
-			{#if game.status.in_check}<span>check</span>{/if}
-			{#if game.status.outcome}<span>{game.status.outcome}</span>{/if}
-		</div>
-
-		{#if optionChoices.length > 0}
-			<div class="runtime-options" aria-label="Choose an option">
-				{#each optionChoices as choice}
-					<button type="button" on:click={() => choose(choice.id)}>
-						{choice.label ?? choice.option_key}
-					</button>
-				{/each}
+	<div class="chess-layout">
+		<div class="board-column">
+			<div class="board-frame" class:orientation-black={orientation === 'black'}>
+				<div class="board">
+					<Bg width={game.width} height={game.height} {orientation} />
+					<Pieces
+						{game}
+						{interaction}
+						{previousGame}
+						transition={latestTransition}
+						{animationSeq}
+						{orientation}
+						onchoice={choose}
+						oncancel={cancelSelection}
+					/>
+				</div>
 			</div>
-		{/if}
+
+			<div class="board-status" class:terminal={game.status.outcome != null}>
+				<span>{statusText(game)}</span>
+				<span class="board-status-meta">halfmove {game.status.halfmove_clock} · repetition {game.status.repetition_count}</span>
+			</div>
+
+			<div class="board-toolbar" aria-label="Board controls">
+				<button type="button" on:click={undo} disabled={!game.can_undo}>Undo</button>
+				<button type="button" on:click={redo} disabled={!game.can_redo}>Redo</button>
+				<button type="button" on:click={resetGame}>Reset</button>
+				<button type="button" on:click={() => (orientation = orientation === 'white' ? 'black' : 'white')}>Flip board</button>
+			</div>
+		</div>
+
+		<aside class="chess-panel">
+			<section>
+				<h2>Position</h2>
+				<div class="fen-current">
+					<input readonly value={currentFen} aria-label="Current FEN" />
+					<button type="button" on:click={copyFen}>Copy</button>
+				</div>
+				<form on:submit|preventDefault={loadFen} class="fen-loader">
+					<input bind:value={fenDraft} spellcheck="false" aria-label="Load FEN" />
+					<button type="submit">Load FEN</button>
+				</form>
+			</section>
+
+			<section class="history-panel">
+				<h2>History</h2>
+				{#if history.length === 0}
+					<p class="panel-muted">No moves yet.</p>
+				{:else}
+					<ol>
+						{#each history as turn, index}
+							<li><span>{index + 1}.</span> {turn.actions.map((action) => action.kind).join(', ')}</li>
+						{/each}
+					</ol>
+				{/if}
+			</section>
+		</aside>
 	</div>
 {:else if error}
 	<p class="runtime-error">{error}</p>
 {:else}
-	<p class="runtime-loading">Loading Rust/WASM chess runtime…</p>
+	<p class="runtime-loading">{loading ? 'Loading Rust/WASM chess runtime…' : 'Chess runtime unavailable.'}</p>
 {/if}
 
 {#if error && game}

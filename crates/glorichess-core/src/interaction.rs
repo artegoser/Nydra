@@ -197,6 +197,20 @@ impl<R: InteractionRules> InteractionDriver<R> {
         self.finished
     }
 
+    /// Clears transient interaction input without mutating the working game state.
+    ///
+    /// Frontends use this for UI-only cancellation such as deselecting a piece or
+    /// abandoning an unfinished multi-part action. Choices are regenerated from
+    /// the same authoritative working state with a fresh generation.
+    pub fn reset_draft(&mut self) -> Result<Interaction, InteractionError> {
+        if self.finished {
+            return Err(InteractionError::AlreadyFinished);
+        }
+        self.draft = StateMap::new();
+        self.refresh()?;
+        Ok(self.current.clone())
+    }
+
     pub fn choose(&mut self, id: ChoiceId) -> Result<InteractionUpdate, InteractionError> {
         if self.finished {
             return Err(InteractionError::AlreadyFinished);

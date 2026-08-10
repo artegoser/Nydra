@@ -19,6 +19,7 @@ export interface EntityView {
 export interface StatusView {
 	side_to_move: 'white' | 'black';
 	in_check: boolean;
+	checked_king: PositionView | null;
 	outcome: string | null;
 	winner: number | null;
 	loser: number | null;
@@ -28,10 +29,16 @@ export interface StatusView {
 	can_claim_fifty_move_rule: boolean;
 }
 
+export interface MoveEndpointsView {
+	from: PositionView;
+	to: PositionView;
+}
+
 export interface GameView {
 	width: number;
 	height: number;
 	entities: EntityView[];
+	last_move: MoveEndpointsView | null;
 	active_players: number[];
 	status: StatusView;
 	can_undo: boolean;
@@ -46,11 +53,19 @@ export interface ChoiceView {
 	ability: number | null;
 	option_key: string | null;
 	label: string | null;
+	actor: number | null;
+	capture: number | null;
+	move_kind: string | null;
+	target_position: PositionView | null;
+	option_entity_type: number | null;
+	asset_key: string | null;
 	data: unknown;
 }
 
 export interface InteractionView {
 	generation: string;
+	selected_entity: number | null;
+	pending_target: PositionView | null;
 	choices: ChoiceView[];
 }
 
@@ -82,6 +97,7 @@ interface WasmHandle {
 	view(): GameView;
 	interaction(): InteractionView;
 	choose(choiceId: string): TransitionView;
+	cancelSelection(): TransitionView;
 	undo(): TransitionView;
 	redo(): TransitionView;
 	fen(): string;
@@ -131,6 +147,10 @@ export class LocalChessGame {
 
 	choose(choiceId: string): TransitionView {
 		return this.handle.choose(choiceId);
+	}
+
+	cancelSelection(): TransitionView {
+		return this.handle.cancelSelection();
 	}
 
 	undo(): TransitionView {

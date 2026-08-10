@@ -98,7 +98,7 @@ impl GameHandle {
     fn interaction_view(&self) -> InteractionView {
         self.interaction
             .as_ref()
-            .map(|driver| InteractionView::from(driver.interaction()))
+            .map(|driver| InteractionView::from_driver(driver))
             .unwrap_or_default()
     }
 
@@ -173,6 +173,16 @@ impl GameHandle {
                 to_js(&transition)
             }
         }
+    }
+
+    #[wasm_bindgen(js_name = cancelSelection)]
+    pub fn cancel_selection(&mut self) -> Result<JsValue, JsValue> {
+        let driver = self
+            .interaction
+            .as_mut()
+            .ok_or_else(|| js_error("interaction session is unavailable"))?;
+        driver.reset_draft().map_err(js_error)?;
+        to_js(&self.transition_view(false, &[]).map_err(js_error)?)
     }
 
     pub fn undo(&mut self) -> Result<JsValue, JsValue> {
@@ -269,9 +279,16 @@ pub struct EntityView {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct MoveEndpointsView {
+    pub from: PositionView,
+    pub to: PositionView,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct StatusView {
     pub side_to_move: String,
     pub in_check: bool,
+    pub checked_king: Option<PositionView>,
     pub outcome: Option<String>,
     pub winner: Option<u32>,
     pub loser: Option<u32>,
@@ -286,6 +303,7 @@ pub struct GameView {
     pub width: u16,
     pub height: u16,
     pub entities: Vec<EntityView>,
+    pub last_move: Option<MoveEndpointsView>,
     pub active_players: Vec<u32>,
     pub status: StatusView,
     pub can_undo: bool,
@@ -324,10 +342,21 @@ fn build_game_view(
         .as_ref()
         .map(outcome_view)
         .unwrap_or((None, None, None));
+    let checked_king = if status.in_check {
+        rules
+            .king(state, status.side_to_move)
+            .ok()
+            .and_then(|king| state.entity(king).ok())
+            .map(|king| king.position.into())
+    } else {
+        None
+    };
+
     Ok(GameView {
         width: state.board.width(),
         height: state.board.height(),
         entities,
+        last_move: last_move_view(history),
         active_players: state
             .turn
             .active_players
@@ -337,6 +366,7 @@ fn build_game_view(
         status: StatusView {
             side_to_move: side_name(status.side_to_move).into(),
             in_check: status.in_check,
+            checked_king,
             outcome,
             winner,
             loser,
@@ -347,6 +377,31 @@ fn build_game_view(
         },
         can_undo,
         can_redo,
+    })
+}
+
+fn last_move_view(history: &glorichess_core::History) -> Option<MoveEndpointsView> {
+    let step = history
+        .turns()
+        .iter()
+        .rev()
+        .find(|turn| !turn.synthetic)?
+        .steps
+        .last()?;
+    if step.action.kind != "chess_move" {
+        return None;
+    }
+    let from = Position::new(
+        u16::try_from(step.action.data.get("from_x")?.as_u64()?).ok()?,
+        u16::try_from(step.action.data.get("from_y")?.as_u64()?).ok()?,
+    );
+    let to = Position::new(
+        u16::try_from(step.action.data.get("to_x")?.as_u64()?).ok()?,
+        u16::try_from(step.action.data.get("to_y")?.as_u64()?).ok()?,
+    );
+    Some(MoveEndpointsView {
+        from: from.into(),
+        to: to.into(),
     })
 }
 
@@ -386,14 +441,24 @@ fn outcome_view(outcome: &ChessOutcome) -> (Option<String>, Option<u32>, Option<
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct InteractionView {
     pub generation: String,
+    pub selected_entity: Option<u32>,
+    pub pending_target: Option<PositionView>,
     pub choices: Vec<ChoiceView>,
 }
 
-impl From<&glorichess_core::Interaction> for InteractionView {
-    fn from(interaction: &glorichess_core::Interaction) -> Self {
+impl InteractionView {
+    fn from_driver(driver: &InteractionDriver<ChessInteractionRules>) -> Self {
         Self {
-            generation: interaction.generation.to_string(),
-            choices: interaction.choices.iter().map(ChoiceView::from).collect(),
+            generation: driver.interaction().generation.to_string(),
+            selected_entity: ChessInteractionRules::selected_entity(driver.draft())
+                .map(|entity| entity.get()),
+            pending_target: ChessInteractionRules::pending_target(driver.draft()).map(Into::into),
+            choices: driver
+                .interaction()
+                .choices
+                .iter()
+                .map(ChoiceView::from)
+                .collect(),
         }
     }
 }
@@ -407,6 +472,12 @@ pub struct ChoiceView {
     pub ability: Option<u32>,
     pub option_key: Option<String>,
     pub label: Option<String>,
+    pub actor: Option<u32>,
+    pub capture: Option<u32>,
+    pub move_kind: Option<String>,
+    pub target_position: Option<PositionView>,
+    pub option_entity_type: Option<u32>,
+    pub asset_key: Option<String>,
     pub data: StateMap,
 }
 
@@ -420,6 +491,26 @@ impl From<&Choice> for ChoiceView {
             ability: None,
             option_key: None,
             label: choice.label.clone(),
+            actor: state_u32(&choice.data, "actor"),
+            capture: state_u32(&choice.data, "capture"),
+            move_kind: choice
+                .data
+                .get("move_kind")
+                .and_then(glorichess_core::StateValue::as_str)
+                .map(str::to_owned),
+            target_position: match (
+                state_u16(&choice.data, "target_x"),
+                state_u16(&choice.data, "target_y"),
+            ) {
+                (Some(x), Some(y)) => Some(PositionView { x, y }),
+                _ => None,
+            },
+            option_entity_type: state_u32(&choice.data, "entity_type"),
+            asset_key: choice
+                .data
+                .get("asset_key")
+                .and_then(glorichess_core::StateValue::as_str)
+                .map(str::to_owned),
             data: choice.data.clone(),
         };
         match &choice.kind {
@@ -445,6 +536,18 @@ impl From<&Choice> for ChoiceView {
         }
         view
     }
+}
+
+fn state_u32(data: &StateMap, key: &str) -> Option<u32> {
+    data.get(key)
+        .and_then(glorichess_core::StateValue::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+}
+
+fn state_u16(data: &StateMap, key: &str) -> Option<u16> {
+    data.get(key)
+        .and_then(glorichess_core::StateValue::as_u64)
+        .and_then(|value| u16::try_from(value).ok())
 }
 
 #[derive(Clone, Debug, Serialize)]

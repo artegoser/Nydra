@@ -308,107 +308,107 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 
 ### Authority boundary
 
-- [ ] Keep all legal-origin/legal-destination generation in Rust/WASM.
-- [ ] Keep castling/en-passant/promotion/check semantics out of Svelte.
-- [ ] Map Rust-issued opaque `ChoiceId`s to board origins/destinations/options.
-- [ ] Ensure drag and click use exactly the same Rust-issued choices.
-- [ ] Never commit speculative board state in Svelte before Rust accepts a choice.
+- [x] Keep all legal-origin/legal-destination generation in Rust/WASM.
+- [x] Keep castling/en-passant/promotion/check semantics out of Svelte.
+- [x] Map Rust-issued opaque `ChoiceId`s to board origins/destinations/options.
+- [x] Ensure drag and click use exactly the same Rust-issued choices.
+- [x] Never commit speculative board state in Svelte before Rust accepts a choice.
 
 ### Click selection
 
-- [ ] Select a controllable piece/entity by click.
-- [ ] Clicking another controllable piece switches selection.
-- [ ] Clicking a legal destination executes the Rust-issued destination choice.
-- [ ] Clicking the selected origin clears it where Lichess does.
-- [ ] Clicking an invalid square clears/recomputes selection with Lichess-compatible behavior.
-- [ ] Clear/recompute selection after every authoritative transition.
+- [x] Select a controllable piece/entity by click.
+- [x] Clicking another controllable piece switches selection.
+- [x] Clicking a legal destination executes the Rust-issued destination choice.
+- [x] Clicking the selected origin clears it where Lichess does.
+- [x] Clicking an invalid square clears/recomputes selection with Lichess-compatible behavior.
+- [x] Clear/recompute selection after every authoritative transition.
 
 ### Drag and drop
 
-- [ ] Add true pointer-driven piece drag; do not emulate drag as click-click.
-- [ ] Use an approximately 3 CSS-pixel drag threshold on desktop.
-- [ ] Support one-finger touch drag.
-- [ ] Keep the dragged piece centered under/following the pointer.
-- [ ] Raise the dragged piece above normal pieces/animations.
-- [ ] Show a translucent origin ghost when highlighting is enabled.
-- [ ] Keep legal destination markers visible while dragging.
-- [ ] Add Lichess-style legal-destination hover feedback during drag.
-- [ ] Drop on a legal target by submitting its existing Rust `ChoiceId`.
-- [ ] Cancel cleanly when dropped on origin, outside the board, or on an illegal target.
-- [ ] Ensure cancelled drag leaves authoritative state unchanged.
-- [ ] Ensure active piece movement animation does not conflict with drag transforms.
+- [x] Add true pointer-driven piece drag; do not emulate drag as click-click.
+- [x] Use an approximately 3 CSS-pixel drag threshold on desktop.
+- [x] Support one-finger touch drag.
+- [x] Keep the dragged piece centered under/following the pointer.
+- [x] Raise the dragged piece above normal pieces/animations.
+- [x] Show a translucent origin ghost when highlighting is enabled.
+- [x] Keep legal destination markers visible while dragging.
+- [x] Add Lichess-style legal-destination hover feedback during drag.
+- [x] Drop on a legal target by submitting its existing Rust `ChoiceId`.
+- [x] Cancel cleanly when dropped on origin, outside the board, or on an illegal target.
+- [x] Ensure cancelled drag leaves authoritative state unchanged.
+- [x] Ensure active piece movement animation does not conflict with drag transforms.
 
 ### Destination/highlight parity
 
-- [ ] Render quiet legal destinations as Lichess-style centered radial dots.
-- [ ] Render occupied/capture legal destinations as Lichess-style outer rings instead of dots.
-- [ ] Determine occupied-target presentation from `GameView`, not chess geometry in Svelte.
-- [ ] Add full-square hover feedback for legal destinations.
-- [ ] Add selected-origin highlight.
-- [ ] Add last-move origin highlight.
-- [ ] Add last-move destination highlight.
-- [ ] Add Lichess-style radial red check highlight on the checked king square.
-- [ ] Define deterministic layering when selected/last-move/check/destination states overlap.
+- [x] Render quiet legal destinations as Lichess-style centered radial dots.
+- [x] Render occupied/capture legal destinations as Lichess-style outer rings instead of dots.
+- [x] Determine occupied-target presentation from `GameView`, not chess geometry in Svelte.
+- [x] Add full-square hover feedback for legal destinations.
+- [x] Add selected-origin highlight.
+- [x] Add last-move origin highlight.
+- [x] Add last-move destination highlight.
+- [x] Add Lichess-style radial red check highlight on the checked king square.
+- [x] Define deterministic layering when selected/last-move/check/destination states overlap.
 
 ### Animation parity
 
-- [ ] Animate ordinary movement from structural deltas/before-after entity positions.
-- [ ] Target approximately 200 ms default move animation with Lichess-like easing.
-- [ ] Fade/remove captures while the capturing piece moves.
-- [ ] Animate king and rook concurrently for castling.
-- [ ] Animate en passant as capturing-pawn movement plus independent victim removal.
-- [ ] Animate promotion movement and resulting type/presentation change without teleporting.
-- [ ] Keep animation implementation generic and driven by `StateDelta`, not chess-specific frontend rules.
-- [ ] Respect reduced-motion preferences.
+- [x] Animate ordinary movement from structural deltas/before-after entity positions.
+- [x] Target approximately 200 ms default move animation with Lichess-like easing.
+- [x] Fade/remove captures while the capturing piece moves.
+- [x] Animate king and rook concurrently for castling.
+- [x] Animate en passant as capturing-pawn movement plus independent victim removal.
+- [x] Animate promotion movement and resulting type/presentation change without teleporting.
+- [x] Keep animation implementation generic and driven by `StateDelta`, not chess-specific frontend rules.
+- [x] Respect reduced-motion preferences.
 
 ### Promotion
 
-- [ ] Replace generic text promotion buttons with a board-local graphical chooser.
-- [ ] Render queen/rook/bishop/knight graphics from Rust-provided options.
-- [ ] Submit the corresponding opaque option `ChoiceId`.
-- [ ] Keep underpromotion equally accessible.
-- [ ] Define explicit cancellation behavior without fabricating a move.
+- [x] Replace generic text promotion buttons with a board-local graphical chooser.
+- [x] Render queen/rook/bishop/knight graphics from Rust-provided options.
+- [x] Submit the corresponding opaque option `ChoiceId`.
+- [x] Keep underpromotion equally accessible.
+- [x] Define explicit cancellation behavior without fabricating a move.
 
 ### Geometry/orientation/touch
 
-- [ ] Keep standard chess board exactly square and responsive.
-- [ ] Preserve exact square hit boxes after resize.
-- [ ] Support white orientation.
-- [ ] Support black orientation.
-- [ ] Flip coordinates with orientation.
-- [ ] Verify click hit testing in both orientations.
-- [ ] Verify drag hit testing in both orientations.
-- [ ] Avoid duplicate mouse actions after touch interaction.
-- [ ] Avoid blocking page scroll unless a board interaction actually begins.
+- [x] Keep standard chess board exactly square and responsive.
+- [x] Preserve exact square hit boxes after resize.
+- [x] Support white orientation.
+- [x] Support black orientation.
+- [x] Flip coordinates with orientation.
+- [x] Verify click hit testing in both orientations.
+- [x] Verify drag hit testing in both orientations.
+- [x] Avoid duplicate mouse actions after touch interaction.
+- [x] Avoid blocking page scroll unless a board interaction actually begins.
 
 ### Board appearance
 
-- [ ] Match the default Lichess brown-board visual relationship closely.
-- [ ] Match Lichess-like piece scale/alignment within squares.
-- [ ] Remove current GloriChess-only destination marker styling that visibly differs from Lichess.
-- [ ] Remove/adjust current board-only styling that visibly prevents side-by-side Lichess parity.
-- [ ] Do not add any Lichess/Chessground runtime dependency.
-- [ ] Do not copy upstream source/CSS verbatim; independently recreate the behavior/rendered result.
+- [x] Match the default Lichess brown-board visual relationship closely.
+- [x] Match Lichess-like piece scale/alignment within squares.
+- [x] Remove current GloriChess-only destination marker styling that visibly differs from Lichess.
+- [x] Remove/adjust current board-only styling that visibly prevents side-by-side Lichess parity.
+- [x] Do not add any Lichess/Chessground runtime dependency.
+- [x] Do not copy upstream source/CSS verbatim; independently recreate the behavior/rendered result.
 
 ### Board-local game controls
 
-- [ ] Show active side/player.
-- [ ] Show check status.
-- [ ] Show checkmate/stalemate/draw outcome.
-- [ ] Add undo control.
-- [ ] Add redo control.
-- [ ] Add reset-to-start control.
-- [ ] Add FEN input/load development control.
-- [ ] Add current FEN display/copyable field.
-- [ ] Add basic move/history display.
+- [x] Show active side/player.
+- [x] Show check status.
+- [x] Show checkmate/stalemate/draw outcome.
+- [x] Add undo control.
+- [x] Add redo control.
+- [x] Add reset-to-start control.
+- [x] Add FEN input/load development control.
+- [x] Add current FEN display/copyable field.
+- [x] Add basic move/history display.
 
 ### Secondary Lichess board affordances
 
-- [ ] Design the interaction state so future premove support does not require a drag/selection rewrite.
-- [ ] Defer actual premove execution until a mode has a meaningful opponent-turn waiting period.
-- [ ] Add presentation-only right-click square annotations.
-- [ ] Add presentation-only right-drag arrows.
-- [ ] Keep drawings out of authoritative game state.
+- [x] Design the interaction state so future premove support does not require a drag/selection rewrite.
+- [x] Defer actual premove execution until a mode has a meaningful opponent-turn waiting period.
+- [x] Add presentation-only right-click square annotations.
+- [x] Add presentation-only right-drag arrows.
+- [x] Keep drawings out of authoritative game state.
 
 ### Acceptance
 
@@ -420,6 +420,7 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [ ] Verify drag threshold, ghost, z-order, cancellation, and touch behavior side-by-side against Lichess.
 - [ ] Verify move/capture/castling/en-passant/promotion animation side-by-side against Lichess.
 - [ ] Confirm no frontend chess legality implementation was introduced.
+
 
 ## Phase 14 — Correctness suite
 

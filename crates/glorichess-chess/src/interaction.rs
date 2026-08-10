@@ -41,7 +41,7 @@ impl ChessInteractionRules {
         })
     }
 
-    fn selected(draft: &StateMap) -> Option<EntityId> {
+    pub fn selected_entity(draft: &StateMap) -> Option<EntityId> {
         let raw = draft.get(SELECTED_ENTITY)?.as_u64()?;
         let raw = u32::try_from(raw).ok()?;
         Some(EntityId::new(raw))
@@ -53,7 +53,7 @@ impl ChessInteractionRules {
         draft.remove(PENDING_Y);
     }
 
-    fn pending_target(draft: &StateMap) -> Option<glorichess_core::Position> {
+    pub fn pending_target(draft: &StateMap) -> Option<glorichess_core::Position> {
         let x = u16::try_from(draft.get(PENDING_X)?.as_u64()?).ok()?;
         let y = u16::try_from(draft.get(PENDING_Y)?.as_u64()?).ok()?;
         Some(glorichess_core::Position::new(x, y))
@@ -120,13 +120,38 @@ impl InteractionRules for ChessInteractionRules {
             return Ok(Vec::new());
         }
 
-        if Self::pending_target(draft).is_some() {
-            return Ok(vec![
-                ChoiceSpec::option("queen").with_label("Queen"),
-                ChoiceSpec::option("rook").with_label("Rook"),
-                ChoiceSpec::option("bishop").with_label("Bishop"),
-                ChoiceSpec::option("knight").with_label("Knight"),
-            ]);
+        if let Some(target) = Self::pending_target(draft) {
+            let actor = Self::selected_entity(draft).ok_or_else(|| {
+                InteractionError::RuleViolation("promotion target has no selected pawn".into())
+            })?;
+            let piece = turn.working.entity(actor)?;
+            let side = ChessSide::from_player(piece.owner).ok_or_else(|| {
+                InteractionError::RuleViolation("promotion pawn has no chess side".into())
+            })?;
+            let side_name = match side {
+                ChessSide::White => "white",
+                ChessSide::Black => "black",
+            };
+            let mut choices = Vec::new();
+            for (key, label, entity_type) in [
+                ("queen", "Queen", QUEEN),
+                ("rook", "Rook", ROOK),
+                ("bishop", "Bishop", BISHOP),
+                ("knight", "Knight", KNIGHT),
+            ] {
+                let mut choice = ChoiceSpec::option(key).with_label(label);
+                choice.data.insert("actor", u64::from(actor.get()));
+                choice.data.insert("target_x", u64::from(target.x));
+                choice.data.insert("target_y", u64::from(target.y));
+                choice
+                    .data
+                    .insert("entity_type", u64::from(entity_type.get()));
+                choice
+                    .data
+                    .insert("asset_key", format!("chess/{side_name}/{key}"));
+                choices.push(choice);
+            }
+            return Ok(choices);
         }
 
         let mut choices = Vec::new();
@@ -136,25 +161,23 @@ impl InteractionRules for ChessInteractionRules {
             .values()
             .filter(|entity| entity.controller == side.player())
         {
-            if !self.legal_moves(turn, entity.id)?.is_empty() {
-                choices.push(ChoiceSpec::entity(entity.id));
+            let legal_moves = self.legal_moves(turn, entity.id)?;
+            if legal_moves.is_empty() {
+                continue;
             }
-        }
-
-        if let Some(entity) = Self::selected(draft) {
-            if turn.working.entity(entity).is_ok() {
-                for movement in self.legal_moves(turn, entity)? {
-                    let mut choice = ChoiceSpec::position(movement.to);
-                    if let Some(capture) = movement.capture {
-                        choice.data.insert("capture", u64::from(capture.get()));
-                    }
-                    choice.data.insert("move_kind", match movement.kind {
-                        crate::ChessMoveKind::Normal => "normal",
-                        crate::ChessMoveKind::EnPassant { .. } => "en_passant",
-                        crate::ChessMoveKind::Castle { .. } => "castle",
-                    });
-                    choices.push(choice);
+            choices.push(ChoiceSpec::entity(entity.id));
+            for movement in legal_moves {
+                let mut choice = ChoiceSpec::position(movement.to);
+                choice.data.insert("actor", u64::from(entity.id.get()));
+                if let Some(capture) = movement.capture {
+                    choice.data.insert("capture", u64::from(capture.get()));
                 }
+                choice.data.insert("move_kind", match movement.kind {
+                    crate::ChessMoveKind::Normal => "normal",
+                    crate::ChessMoveKind::EnPassant { .. } => "en_passant",
+                    crate::ChessMoveKind::Castle { .. } => "castle",
+                });
+                choices.push(choice);
             }
         }
 
@@ -169,6 +192,10 @@ impl InteractionRules for ChessInteractionRules {
     ) -> Result<InteractionFlow, InteractionError> {
         match &choice.kind {
             ChoiceKind::SelectEntity { entity } => {
+                if Self::selected_entity(draft) == Some(*entity) {
+                    Self::clear_selection(draft);
+                    return Ok(InteractionFlow::Continue);
+                }
                 let side = self.side_to_move(turn)?;
                 let piece = turn.working.entity(*entity)?;
                 if piece.controller != side.player() {
@@ -185,9 +212,27 @@ impl InteractionRules for ChessInteractionRules {
                 Ok(InteractionFlow::Continue)
             }
             ChoiceKind::SelectPosition { position } => {
-                let actor = Self::selected(draft).ok_or_else(|| {
-                    InteractionError::RuleViolation("no chess entity is selected".into())
-                })?;
+                let actor_from_choice = choice
+                    .data
+                    .get("actor")
+                    .and_then(glorichess_core::StateValue::as_u64)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .map(EntityId::new)
+                    .ok_or_else(|| {
+                        InteractionError::RuleViolation("destination choice has no actor".into())
+                    })?;
+                let actor = match Self::selected_entity(draft) {
+                    Some(selected) if selected != actor_from_choice => {
+                        return Err(InteractionError::RuleViolation(
+                            "destination belongs to a different selected entity".into(),
+                        ));
+                    }
+                    Some(selected) => selected,
+                    None => {
+                        Self::set_selected(draft, actor_from_choice);
+                        actor_from_choice
+                    }
+                };
                 let movement = self
                     .legal_moves(turn, actor)?
                     .into_iter()
@@ -208,7 +253,7 @@ impl InteractionRules for ChessInteractionRules {
                 Ok(result)
             }
             ChoiceKind::SelectOption { key } => {
-                let actor = Self::selected(draft).ok_or_else(|| {
+                let actor = Self::selected_entity(draft).ok_or_else(|| {
                     InteractionError::RuleViolation("no pawn is selected for promotion".into())
                 })?;
                 let target = Self::pending_target(draft).ok_or_else(|| {

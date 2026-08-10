@@ -357,12 +357,79 @@ mod tests {
             .id;
         driver.choose(rook_choice).unwrap();
 
-        assert!(!driver.interaction().choices.iter().any(|choice| {
-            matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(3, 1))
-        }));
-        assert!(driver.interaction().choices.iter().any(|choice| {
-            matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(4, 2))
-        }));
+        let is_rook_destination = |choice: &glorichess_core::Choice, target: Position| {
+            matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == target)
+                && choice
+                    .data
+                    .get("actor")
+                    .and_then(glorichess_core::StateValue::as_u64)
+                    == Some(u64::from(rook.get()))
+        };
+        assert!(!driver
+            .interaction()
+            .choices
+            .iter()
+            .any(|choice| is_rook_destination(choice, Position::new(3, 1))));
+        assert!(driver
+            .interaction()
+            .choices
+            .iter()
+            .any(|choice| is_rook_destination(choice, Position::new(4, 2))));
+    }
+
+    #[test]
+    fn chess_destinations_are_actor_bound_and_can_execute_without_click_selection() {
+        use glorichess_core::{ChoiceKind, InteractionDriver, InteractionUpdate, TurnSession};
+
+        let rules = ChessRules::standard();
+        let state = standard_chess_state().unwrap();
+        let pawn = state.entity_at(Position::new(4, 1)).unwrap().unwrap().id;
+        let turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        let mut driver = InteractionDriver::new(ChessInteractionRules::new(&rules), turn).unwrap();
+
+        let destination = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| {
+                matches!(choice.kind, ChoiceKind::SelectPosition { position } if position == Position::new(4, 3))
+                    && choice
+                        .data
+                        .get("actor")
+                        .and_then(glorichess_core::StateValue::as_u64)
+                        == Some(u64::from(pawn.get()))
+            })
+            .unwrap()
+            .id;
+
+        assert_eq!(driver.choose(destination).unwrap(), InteractionUpdate::Finished);
+        assert_eq!(
+            driver.turn().working.entity(pawn).unwrap().position,
+            Position::new(4, 3)
+        );
+    }
+
+    #[test]
+    fn selecting_the_same_piece_twice_clears_chess_selection() {
+        use glorichess_core::{ChoiceKind, InteractionDriver, TurnSession};
+
+        let rules = ChessRules::standard();
+        let state = standard_chess_state().unwrap();
+        let pawn = state.entity_at(Position::new(4, 1)).unwrap().unwrap().id;
+        let turn = TurnSession::new(&state, WHITE_PLAYER).unwrap();
+        let mut driver = InteractionDriver::new(ChessInteractionRules::new(&rules), turn).unwrap();
+
+        for expected_selected in [Some(pawn), None] {
+            let choice = driver
+                .interaction()
+                .choices
+                .iter()
+                .find(|choice| matches!(choice.kind, ChoiceKind::SelectEntity { entity } if entity == pawn))
+                .unwrap()
+                .id;
+            driver.choose(choice).unwrap();
+            assert_eq!(ChessInteractionRules::selected_entity(driver.draft()), expected_selected);
+        }
     }
 
     #[test]

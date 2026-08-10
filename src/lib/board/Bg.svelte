@@ -3,39 +3,29 @@
 
 	export let width: number;
 	export let height: number;
+	export let orientation: 'white' | 'black' = 'white';
 	export let showCoordinates = true;
-	export let allCoordinates = false;
+
+	function boardX(col: number) {
+		return orientation === 'white' ? col : width - col - 1;
+	}
+
+	function boardY(row: number) {
+		return orientation === 'white' ? height - row - 1 : row;
+	}
 </script>
 
-<div class="board-layer bg" style="--width: {width}; --height: {height};">
+<div class="board-layer board-background" style="--width: {width}; --height: {height};" aria-hidden="true">
 	{#each { length: height } as _, row}
 		{#each { length: width } as _, col}
-			<div
-				class="square {(row + col) % 2 === 0 ? 'white' : 'black'}"
-				class:right-bottom-corner={row == height - 1 && col == width - 1}
-				class:right-top-corner={row == 0 && col == width - 1}
-				class:left-bottom-corner={row == height - 1 && col == 0}
-				class:left-top-corner={row == 0 && col == 0}
-			>
-				{#if allCoordinates}
-					<div class="coordinates all">
-						{numToAlpha(col)}{height - row}
-					</div>
-				{:else if showCoordinates && row == height - 1 && showCoordinates && col == width - 1}
-					<div class="coordinates columns">
-						{numToAlpha(col)}
-					</div>
-					<div class="coordinates rows">
-						{height - row}
-					</div>
-				{:else if showCoordinates && row == height - 1}
-					<div class="coordinates columns">
-						{numToAlpha(col)}
-					</div>
-				{:else if showCoordinates && col == width - 1}
-					<div class="coordinates rows">
-						{height - row}
-					</div>
+			{@const x = boardX(col)}
+			{@const y = boardY(row)}
+			<div class="board-square" class:light={(x + y) % 2 === 1} class:dark={(x + y) % 2 === 0}>
+				{#if showCoordinates && col === 0}
+					<span class="board-coordinate rank">{y + 1}</span>
+				{/if}
+				{#if showCoordinates && row === height - 1}
+					<span class="board-coordinate file">{numToAlpha(x)}</span>
 				{/if}
 			</div>
 		{/each}
