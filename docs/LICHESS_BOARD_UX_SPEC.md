@@ -59,7 +59,7 @@ Required behavior:
 - the dragged piece renders above normal pieces and animations;
 - optionally show a translucent ghost at the origin; default behavior should match Lichess highlighting-enabled play;
 - legal destinations remain visible during drag;
-- hovering a legal destination changes its destination marker to the Lichess-style hover state;
+- hovering a legal destination changes its destination marker to the Lichess-style full-square hover state both during drag and ordinary pointer hover;
 - dropping on a legal destination submits the Rust-issued destination `ChoiceId`;
 - dropping on the origin or outside/onto an illegal destination does not mutate the game state;
 - drag cancellation restores the authoritative board without a synthetic move;
@@ -83,7 +83,7 @@ An empty legal target renders as a small centered circular destination marker, v
 
 ### 4.2 Capture destination
 
-A legal target containing a capturable piece must render as a ring/edge treatment around the occupied square/piece, not as the same centered marker used for empty squares.
+A legal target containing a capturable piece must render as four triangular edge/corner wedges around the occupied square/piece, not as the same centered marker used for empty squares.
 
 This distinction must be derived from the current authoritative `GameView` plus the Rust-issued destination choice, not from chess-specific frontend logic.
 
@@ -172,7 +172,7 @@ Target behavior:
 ## 10. Board geometry and orientation
 
 - board remains exactly square for standard chess;
-- restore the original GloriChess rounded outer board corners while preserving exact square geometry and clipping overlays/pieces to the board;
+- keep subtle rounded outer board corners while preserving exact square geometry and clipping overlays/pieces to the board; the radius must stay small enough that coordinate labels are not visibly clipped;
 - pieces fill each square at Lichess-like visual scale;
 - coordinates match board orientation;
 - support white and black orientation;

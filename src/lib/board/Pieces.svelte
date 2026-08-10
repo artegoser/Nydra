@@ -235,6 +235,14 @@
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 	}
 
+	function handleSquareEnter(position: PositionView) {
+		if (!drag && destinationBySquare.has(key(position))) hover = position;
+	}
+
+	function handleSquareLeave(position: PositionView) {
+		if (!drag && samePosition(hover, position)) hover = null;
+	}
+
 	function handlePointerMove(event: PointerEvent) {
 		if (drawStart) {
 			drawCurrent = positionFromPointer(event.clientX, event.clientY);
@@ -510,6 +518,8 @@
 					class:movable-origin={entity != null && entityChoices.has(entity.id)}
 					class:legal-target={destinationBySquare.has(key(position))}
 					aria-label={entity?.label ? `${entity.label} on ${x + 1},${y + 1}` : `Square ${x + 1},${y + 1}`}
+					on:pointerenter={() => handleSquareEnter(position)}
+					on:pointerleave={() => handleSquareLeave(position)}
 					on:pointerdown={(event) => handlePointerDown(event, position)}
 					on:click={() => handleSquareClick(position)}
 				></button>
