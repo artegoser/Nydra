@@ -21,11 +21,12 @@
 		"wasm:build": "wasm-pack build crates/glorichess-wasm --target web --out-dir ../../src/lib/wasm/pkg --out-name glorichess",
 		"test": "cargo test --workspace && pnpm check",
 		"test:full": "cargo test --workspace && cargo test --release -p glorichess-chess perft::tests:: -- --ignored && cargo check --workspace && cargo clippy --workspace --all-targets --all-features && pnpm check && NODE_ENV=production vite build",
-		"browserslist:update": "pnpm dlx update-browserslist-db latest"
+		"browserslist:update": "pnpm dlx update-browserslist-db latest",
+		"start": "node build"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.3",
-		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.9.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"autoprefixer": "^10.4.20",
