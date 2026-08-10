@@ -426,32 +426,32 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 
 ### Perft
 
-- [ ] Initial position depth 1 = 20.
-- [ ] Initial position depth 2 = 400.
-- [ ] Initial position depth 3 = 8,902.
-- [ ] Initial position depth 4 = 197,281.
-- [ ] Add known castling-heavy perft position(s).
-- [ ] Add known en-passant/check interaction perft position(s).
-- [ ] Add known promotion perft position(s).
+- [x] Initial position depth 1 = 20.
+- [x] Initial position depth 2 = 400.
+- [x] Initial position depth 3 = 8,902.
+- [x] Initial position depth 4 = 197,281.
+- [x] Add known castling-heavy perft position(s).
+- [x] Add known en-passant/check interaction perft position(s).
+- [x] Add known promotion perft position(s).
 
 ### Regressions
 
-- [ ] En passant cannot persist for an extra turn.
-- [ ] En passant can expose a rook/bishop/queen line and become illegal.
-- [ ] Castling cannot pass through check.
-- [ ] Castling cannot leave/enter check.
-- [ ] Returned rook does not recover castling eligibility.
-- [ ] Returned king does not recover castling eligibility.
-- [ ] Pinned piece legal actions are filtered.
-- [ ] Double-check responses are correct.
-- [ ] All four promotion types work.
-- [ ] Stalemate examples are correct.
-- [ ] Checkmate examples are correct.
-- [ ] Threefold/fivefold repetition behavior is correct.
-- [ ] Fifty/seventy-five move behavior is correct.
-- [ ] Dead-position examples are correct.
-- [ ] Undo/redo restores all gameplay-relevant state/history.
-- [ ] FEN import/export keeps continuation semantics correct.
+- [x] En passant cannot persist for an extra turn.
+- [x] En passant can expose a rook/bishop/queen line and become illegal.
+- [x] Castling cannot pass through check.
+- [x] Castling cannot leave/enter check.
+- [x] Returned rook does not recover castling eligibility.
+- [x] Returned king does not recover castling eligibility.
+- [x] Pinned piece legal actions are filtered.
+- [x] Double-check responses are correct.
+- [x] All four promotion types work.
+- [x] Stalemate examples are correct.
+- [x] Checkmate examples are correct.
+- [x] Threefold/fivefold repetition behavior is correct.
+- [x] Fifty/seventy-five move behavior is correct.
+- [x] Dead-position examples are correct.
+- [x] Undo/redo restores all gameplay-relevant state/history.
+- [x] FEN import/export keeps continuation semantics correct.
 
 ## Phase 15 — SAN and PGN
 

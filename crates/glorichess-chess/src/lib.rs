@@ -1,11 +1,14 @@
 //! Standard chess rules implemented on top of `glorichess-core`.
 #![forbid(unsafe_code)]
 
+#[cfg(test)]
+mod correctness;
 mod error;
 mod fen;
 mod game;
 mod interaction;
 mod outcome;
+mod perft;
 mod piece;
 mod pieces;
 
