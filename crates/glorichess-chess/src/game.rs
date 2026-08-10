@@ -448,7 +448,7 @@ impl ChessRules {
             data: action_data,
         };
         let before = turn.working.clone();
-        turn.apply_transaction(action.clone(), |transaction| {
+        turn.apply_transaction(action.clone(), |transaction| -> Result<(), ChessError> {
             {
                 let state = transaction.raw_state_mut();
                 self.apply_move_unchecked(state, &movement)?;

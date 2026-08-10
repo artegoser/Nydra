@@ -5,8 +5,8 @@ use crate::{
 };
 use glorichess_core::{
     ChoiceInput, ChoiceKind, ChoiceSpec, EntityId, EntityPresentation, EntityRule,
-    EntityRuleContext, EntityTypeId, GameState, Position, RuleError, StateChange, StateMap,
-    StateValue, TurnRecord,
+    EntityRuleContext, EntityTypeId, GameState, Position, RuleError, StateChange, StateValue,
+    TurnRecord,
 };
 
 pub struct Pawn;
@@ -26,7 +26,7 @@ impl Pawn {
             .find(|(candidate, _, _)| *candidate == entity_type)
             .copied()
             .ok_or(ChessError::InvalidPromotion(entity_type))?;
-        let mut data = StateMap::new();
+        let mut data = glorichess_core::StateMap::new();
         data.insert("entity_type", u64::from(entity_type.get()));
         Ok(ChoiceInput {
             kind: ChoiceKind::SelectOption { key: key.into() },
