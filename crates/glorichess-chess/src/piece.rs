@@ -181,10 +181,7 @@ pub(crate) fn ray_moves(
     let mut moves = Vec::new();
     for &(dx, dy) in directions {
         let mut current = context.entity().position;
-        loop {
-            let Some(to) = offset(context.state(), current, dx, dy) else {
-                break;
-            };
+        while let Some(to) = offset(context.state(), current, dx, dy) {
             match context.entity_at(to)? {
                 None => moves.push(context.pseudo_move(to)?),
                 Some(other) => {
@@ -207,10 +204,7 @@ pub(crate) fn ray_attacks(
     let mut attacks = Vec::new();
     for &(dx, dy) in directions {
         let mut current = context.entity().position;
-        loop {
-            let Some(to) = offset(context.state(), current, dx, dy) else {
-                break;
-            };
+        while let Some(to) = offset(context.state(), current, dx, dy) {
             attacks.push(to);
             if context.entity_at(to)?.is_some() {
                 break;
