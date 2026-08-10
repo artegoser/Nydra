@@ -101,7 +101,7 @@ Required states:
 - `last-move` — origin and destination of the most recently committed move/turn step relevant to board presentation;
 - `check` — checked king square;
 - `move-dest` — quiet legal target;
-- `move-dest capture` — occupied legal capture target;
+- `move-dest capture` — occupied legal capture target rendered with four triangular wedges;
 - `move-dest hover` — hovered legal target;
 - `current-premove` when premove support becomes meaningful;
 - custom presentation overlays emitted by the runtime without breaking the standard states.
@@ -134,6 +134,8 @@ Required behavior:
 
 - interpolate a moved piece from previous square to resulting square;
 - default animation duration should target approximately 200 ms unless a later user preference overrides it;
+- start movement with an explicit browser animation after the authoritative DOM has rendered; do not depend on a CSS-transition/paint race to establish the initial offset;
+- a transition either animates for its full configured duration or is intentionally skipped (for reduced motion); it must not randomly teleport because the browser missed an intermediate style;
 - use a smooth ease curve with the same perceptual character as Lichess;
 - captured pieces fade/remove while the moving piece travels to the target;
 - castling animates king and rook as two concurrent moved entities from one authoritative transition;
@@ -170,6 +172,7 @@ Target behavior:
 ## 10. Board geometry and orientation
 
 - board remains exactly square for standard chess;
+- restore the original GloriChess rounded outer board corners while preserving exact square geometry and clipping overlays/pieces to the board;
 - pieces fill each square at Lichess-like visual scale;
 - coordinates match board orientation;
 - support white and black orientation;
@@ -184,7 +187,7 @@ Phase 13 should move the current board from "Lichess-inspired" to deliberate Lic
 Acceptance target:
 
 - default brown-board light/dark relationship matches Lichess visually;
-- destination dot, capture ring, selected square, last-move square, hover, check, ghost, and piece motion all match Lichess closely enough that side-by-side comparison reveals no obvious behavioral mismatch;
+- destination dot, capture wedges, selected square, last-move square, hover, check, ghost, and piece motion all match Lichess closely enough that side-by-side comparison reveals no obvious behavioral mismatch;
 - remove current GloriChess-only board affordances that visibly diverge from Lichess unless they are required for generic future game modes;
 - generic future-game affordances must remain dormant for standard chess rather than changing standard chess UX.
 

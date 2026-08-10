@@ -779,7 +779,7 @@ Replace TypeScript piece/FEN/game-state authority with the WASM game handle whil
 
 Replace the temporary click-only board interaction layer with a first-class board UX that matches the standard Lichess game board as closely as practical while remaining an independent GloriChess implementation. The detailed contract lives in [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md).
 
-Phase 13 must include both click-to-move and drag-and-drop, Lichess-style quiet/capture destination markers, selected/last-move/check/hover states, drag threshold + ghost + cancellation semantics, StateDelta-driven move/capture/special-move animations, board-local graphical promotion choices, orientation-safe hit testing, responsive geometry, status/history/undo/redo/FEN development controls, and complete local two-player play.
+Phase 13 must include both click-to-move and drag-and-drop, Lichess-style quiet-dot/capture-wedge destination markers, selected/last-move/check/hover states, drag threshold + ghost + cancellation semantics, StateDelta-driven move/capture/special-move animations, board-local graphical promotion choices, orientation-safe hit testing, responsive geometry, status/history/undo/redo/FEN development controls, and complete local two-player play.
 
 The frontend may own pointer/touch mechanics and visual state, but Rust/WASM remains the sole authority for legal destinations and committed state transitions. No Lichess board package is added as a dependency and no upstream implementation is copied into the project.
 
@@ -795,6 +795,13 @@ Add SAN move generation and PGN import/export after legal move semantics and his
 
 Add test-only non-chess rules that prove custom state, explicit abilities, multi-step turns, history-dependent behavior, multiple players, and control changes work without modifying core architecture.
 
+
+### Phase 17 — Generic action notation and deterministic replay
+
+Implement the canonical ruleset-agnostic game record described in [`GENERIC_ACTION_NOTATION.md`](./GENERIC_ACTION_NOTATION.md). Persist the ordered authoritative choices that produced each committed turn without storing ephemeral `ChoiceId` values, replay them through the ordinary `InteractionDriver`, and keep SAN/PGN as a chess-specific human notation adapter rather than the universal record model.
+
+The phase must prove replay for arbitrary abilities, multi-step turns, forced continuation, history-dependent mechanics, control changes, and games with more than two players without adding mechanic-specific variants to `glorichess-core`.
+
 ## 15. Definition of done for the first core milestone
 
 The milestone is complete when:
@@ -808,8 +815,9 @@ The milestone is complete when:
 7. history is available to rules and supports undo/redo;
 8. the generic turn runtime supports multiple sequential steps even though normal chess mostly uses one;
 9. the frontend receives structural change traces for animation;
-10. the standard chess board matches the Lichess move interaction loop: click + drag, distinct quiet/capture targets, selected/last-move/check feedback, drag ghost/cancellation, and smooth special-move animation;
+10. the standard chess board matches the Lichess move interaction loop: click + drag, quiet dots + capture wedges, selected/last-move/check feedback, drag ghost/cancellation, rounded board clipping, and deterministic special-move animation;
 11. perft and special-rule regression suites pass;
-12. test-only custom rules prove that adding future non-chess entities/abilities does not require changing the generic core.
+12. test-only custom rules prove that adding future non-chess entities/abilities does not require changing the generic core;
+13. a canonical generic action record can replay arbitrary accepted choice sequences through the same interaction runtime.
 
 Only after these conditions are met should work begin on AI/search, multiplayer authority, dynamic/user-defined pieces, procedural abilities, or additional game modes.

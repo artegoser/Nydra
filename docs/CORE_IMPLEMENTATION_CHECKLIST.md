@@ -341,7 +341,7 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 ### Destination/highlight parity
 
 - [x] Render quiet legal destinations as Lichess-style centered radial dots.
-- [x] Render occupied/capture legal destinations as Lichess-style outer rings instead of dots.
+- [x] Render occupied/capture legal destinations as four Lichess-style triangular corner/edge wedges instead of dots.
 - [x] Determine occupied-target presentation from `GameView`, not chess geometry in Svelte.
 - [x] Add full-square hover feedback for legal destinations.
 - [x] Add selected-origin highlight.
@@ -362,6 +362,8 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [x] Keep authoritative `GameView` positions independent from temporary animation offsets.
 - [x] Make animation offsets explicit Svelte dependencies so cleanup/undo/redo cannot leave stale piece transforms.
 - [x] Cancel stale animation frames when a newer transition supersedes them.
+- [x] Start move/capture animation explicitly after DOM synchronization (Web Animations API) instead of relying on a CSS-transition paint race.
+- [x] Ensure ordinary enabled animations either run for the configured duration or are explicitly cancelled/superseded, never randomly teleport because an intermediate style was not painted.
 - [x] Respect reduced-motion preferences.
 
 ### Promotion
@@ -388,6 +390,7 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 
 - [x] Match the default Lichess brown-board visual relationship closely.
 - [x] Match Lichess-like piece scale/alignment within squares.
+- [x] Restore the original rounded outer board corners and clip board overlays/pieces consistently.
 - [x] Remove current GloriChess-only destination marker styling that visibly differs from Lichess.
 - [x] Remove/adjust current board-only styling that visibly prevents side-by-side Lichess parity.
 - [x] Do not add any Lichess/Chessground runtime dependency.
@@ -488,6 +491,31 @@ Create internal/test-only non-chess rules. Do not expose them as a product mode 
 - [ ] Emit an optional semantic presentation cue.
 - [ ] Confirm all of the above required no new chess-specific or mechanic-specific core enum variants.
 
+## Phase 17 — Generic action notation and deterministic replay
+
+Reference: [`GENERIC_ACTION_NOTATION.md`](./GENERIC_ACTION_NOTATION.md).
+
+- [ ] Add a canonical `RecordedChoice` representation that excludes ephemeral `ChoiceId` and presentation labels.
+- [ ] Enforce that `(ChoiceKind, data)` is unique within one generated `Interaction`.
+- [ ] Record the ordered accepted decision trace for every committed non-synthetic turn.
+- [ ] Keep transient/cancelled draft choices out of the committed decision trace.
+- [ ] Preserve multi-choice input that resolves into one state-mutating step.
+- [ ] Preserve multiple sequential state-mutating steps inside one turn.
+- [ ] Add a ruleset/version identifier to portable game records.
+- [ ] Replay records by resolving each recorded semantic choice against the currently generated interaction and submitting its fresh `ChoiceId`.
+- [ ] Never replay by directly applying `StateDelta`.
+- [ ] Optionally verify replayed states with deterministic hashes/checkpoints.
+- [ ] Round-trip a normal chess move through the generic record.
+- [ ] Round-trip castling and promotion through the generic record.
+- [ ] Round-trip move + ability in one turn using the Phase 16 test ruleset.
+- [ ] Round-trip an ability target + option choice.
+- [ ] Round-trip forced multi-step continuation.
+- [ ] Round-trip a history-dependent rewind/copy action.
+- [ ] Round-trip a controller change without owner change.
+- [ ] Round-trip a game with at least three players.
+- [ ] Keep SAN/PGN as a chess-specific pretty notation/import adapter rather than the universal record.
+- [ ] Expose a deterministic generic expanded text/debug rendering for rulesets with no custom human notation adapter.
+
 ## Final acceptance
 
 - [ ] Standard chess is fully playable locally through Svelte + Rust/WASM.
@@ -499,9 +527,10 @@ Create internal/test-only non-chess rules. Do not expose them as a product mode 
 - [ ] History supports rule queries and undo/redo.
 - [ ] Generic turns support multiple sequential steps.
 - [ ] Frontend animations are driven by state changes/presentation metadata rather than duplicated game logic.
-- [ ] Standard chess board interaction is Lichess-parity for click, drag, quiet/capture targets, selected/last-move/check feedback, and special-move animation.
+- [ ] Standard chess board interaction is Lichess-parity for click, drag, quiet dots/capture wedges, selected/last-move/check feedback, rounded clipping, and deterministic special-move animation.
 - [ ] Perft/regression suites pass.
 - [ ] Architecture-proof tests pass.
+- [ ] Generic action records replay arbitrary accepted choice sequences through the same authoritative interaction runtime.
 - [ ] No AI/search engine has been added yet.
 - [ ] No multiplayer/server implementation has been added yet.
 - [ ] No user-facing dynamic-piece DSL/runtime has been added yet.
