@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import type {
 		ChoiceView,
 		EntityView,
@@ -41,12 +42,12 @@
 	let drawColor = '#15781b';
 	let arrows: Arrow[] = [];
 	let squareAnnotations: SquareAnnotation[] = [];
-	let motionOffsets: Record<number, { x: number; y: number }> = {};
 	let assetOverrides: Record<number, string> = {};
 	let fadingPieces: EntityView[] = [];
-	let fadingActive = false;
 	let seenAnimationSeq = -1;
 	let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+	let activeAnimations: Animation[] = [];
+	let seenOrientation: 'white' | 'black' = orientation;
 	let animationToken = 0;
 
 	function key(position: PositionView) {
@@ -77,7 +78,6 @@
 
 	function entityStyle(
 		entity: EntityView,
-		offset: { x: number; y: number } | undefined,
 		currentDrag: DragState | null,
 		orientationValue: 'white' | 'black',
 		width: number,
@@ -85,13 +85,12 @@
 		board: HTMLDivElement | undefined
 	) {
 		const shown = display(entity.position, orientationValue, width, height);
-		const motion = offset ?? { x: 0, y: 0 };
 		if (currentDrag?.started && currentDrag.entityId === entity.id && board) {
 			const bounds = board.getBoundingClientRect();
 			const square = bounds.width / width;
-			return `left:${currentDrag.x - square / 2}px;top:${currentDrag.y - square / 2}px;width:${square}px;height:${square}px;transform:none;transition:none;`;
+			return `left:${currentDrag.x - square / 2}px;top:${currentDrag.y - square / 2}px;width:${square}px;height:${square}px;transform:none;`;
 		}
-		return `left:${(shown.x * 100) / width}%;top:${(shown.y * 100) / height}%;width:${100 / width}%;height:${100 / height}%;transform:translate3d(${motion.x * 100}%,${motion.y * 100}%,0);`;
+		return `left:${(shown.x * 100) / width}%;top:${(shown.y * 100) / height}%;width:${100 / width}%;height:${100 / height}%;`;
 	}
 
 	function fadingStyle(
@@ -189,6 +188,25 @@
 		return '#15781b';
 	}
 
+	function cancelActiveAnimations(clearTransientState = false) {
+		for (const animation of activeAnimations) animation.cancel();
+		activeAnimations = [];
+		if (cleanupTimer) {
+			clearTimeout(cleanupTimer);
+			cleanupTimer = null;
+		}
+		if (clearTransientState) {
+			assetOverrides = {};
+			fadingPieces = [];
+		}
+	}
+
+	function cancelEntityAnimation(entityId: number) {
+		if (!boardElement) return;
+		const node = boardElement.querySelector<HTMLElement>(`.piece-node[data-entity-id="${entityId}"]`);
+		for (const animation of node?.getAnimations() ?? []) animation.cancel();
+	}
+
 	function handlePointerDown(event: PointerEvent, position: PositionView) {
 		if (event.button === 2) {
 			event.preventDefault();
@@ -201,6 +219,7 @@
 		if (event.button !== 0) return;
 		const entity = entitiesBySquare.get(key(position));
 		if (!entity || !entityChoices.has(entity.id)) return;
+		cancelEntityAnimation(entity.id);
 		if (arrows.length || squareAnnotations.length) clearAnnotations();
 		drag = {
 			pointerId: event.pointerId,
@@ -289,25 +308,19 @@
 		}
 	}
 
-	function startTransitionAnimation() {
+	async function startTransitionAnimation() {
 		if (seenAnimationSeq === animationSeq) return;
 		seenAnimationSeq = animationSeq;
 
 		const token = ++animationToken;
-		if (cleanupTimer) {
-			clearTimeout(cleanupTimer);
-			cleanupTimer = null;
-		}
-		motionOffsets = {};
+		cancelActiveAnimations();
 		assetOverrides = {};
 		fadingPieces = [];
-		fadingActive = false;
 
 		if (!transition || !previousGame || typeof window === 'undefined') return;
-		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 		const previousById = new Map(previousGame.entities.map((entity) => [entity.id, entity]));
 		const nextById = new Map(game.entities.map((entity) => [entity.id, entity]));
-		const offsets: Record<number, { x: number; y: number }> = {};
+		const moved: Array<{ entity: number; x: number; y: number }> = [];
 		const overrides: Record<number, string> = {};
 		const removed: EntityView[] = [];
 
@@ -318,10 +331,11 @@
 				const to = change.to as PositionView;
 				const fromDisplay = display(from, orientation, game.width, game.height);
 				const toDisplay = display(to, orientation, game.width, game.height);
-				offsets[entity] = {
+				moved.push({
+					entity,
 					x: fromDisplay.x - toDisplay.x,
 					y: fromDisplay.y - toDisplay.y
-				};
+				});
 			}
 			if (change.type === 'entity_removed') {
 				const snapshot = change.entity as { id?: number } | undefined;
@@ -335,29 +349,69 @@
 			}
 		}
 
-		motionOffsets = offsets;
 		assetOverrides = overrides;
 		fadingPieces = removed;
-		fadingActive = false;
-		requestAnimationFrame(() =>
-			requestAnimationFrame(() => {
-				if (token !== animationToken) return;
-				motionOffsets = Object.fromEntries(
-					Object.keys(offsets).map((id) => [Number(id), { x: 0, y: 0 }])
-				);
-				fadingActive = true;
-			})
-		);
-		cleanupTimer = setTimeout(() => {
-			if (token !== animationToken) return;
-			motionOffsets = {};
+		await tick();
+		if (token !== animationToken || !boardElement) return;
+
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
 			assetOverrides = {};
 			fadingPieces = [];
-			fadingActive = false;
-		}, 220);
+			return;
+		}
+
+		const duration = 200;
+		const easing = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+		const animations: Animation[] = [];
+		for (const move of moved) {
+			const node = boardElement.querySelector<HTMLElement>(
+				`.piece-node[data-entity-id="${move.entity}"]:not(.fading-piece)`
+			);
+			if (!node) continue;
+			animations.push(
+				node.animate(
+					[
+						{ transform: `translate3d(${move.x * 100}%, ${move.y * 100}%, 0)` },
+						{ transform: 'translate3d(0, 0, 0)' }
+					],
+					{ duration, easing }
+				)
+			);
+		}
+		for (const entity of removed) {
+			const node = boardElement.querySelector<HTMLElement>(
+				`.fading-piece[data-entity-id="${entity.id}"]`
+			);
+			if (!node) continue;
+			animations.push(node.animate([{ opacity: 1 }, { opacity: 0 }], { duration, easing: 'ease-out' }));
+		}
+		activeAnimations = animations;
+
+		const cleanup = () => {
+			if (token !== animationToken) return;
+			activeAnimations = [];
+			assetOverrides = {};
+			fadingPieces = [];
+			if (cleanupTimer) {
+				clearTimeout(cleanupTimer);
+				cleanupTimer = null;
+			}
+		};
+
+		if (animations.length === 0) {
+			cleanup();
+			return;
+		}
+		Promise.allSettled(animations.map((animation) => animation.finished)).then(cleanup);
+		cleanupTimer = setTimeout(cleanup, duration + 80);
 	}
 
-	$: if (animationSeq !== seenAnimationSeq) startTransitionAnimation();
+	$: if (animationSeq !== seenAnimationSeq) void startTransitionAnimation();
+	$: if (orientation !== seenOrientation) {
+		seenOrientation = orientation;
+		animationToken += 1;
+		cancelActiveAnimations(true);
+	}
 </script>
 
 <div
@@ -420,7 +474,7 @@
 		{#each fadingPieces as entity (entity.id)}
 			<img
 				class="piece-node fading-piece"
-				class:fading-active={fadingActive}
+				data-entity-id={entity.id}
 				style={fadingStyle(entity, orientation, game.width, game.height)}
 				src={assetPathFromKey(entity.asset_key)}
 				alt=""
@@ -429,12 +483,13 @@
 		{/each}
 		{#each game.entities as entity (entity.id)}
 			{#if drag?.started && drag.entityId === entity.id}
-				<img class="piece-node origin-ghost" style={fadingStyle(entity, orientation, game.width, game.height)} src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)} alt="" draggable="false" />
+				<img class="piece-node origin-ghost" data-entity-id={entity.id} style={fadingStyle(entity, orientation, game.width, game.height)} src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)} alt="" draggable="false" />
 			{/if}
 			<img
 				class="piece-node"
+				data-entity-id={entity.id}
 				class:dragging={drag?.started && drag.entityId === entity.id}
-				style={entityStyle(entity, motionOffsets[entity.id], drag, orientation, game.width, game.height, boardElement)}
+				style={entityStyle(entity, drag, orientation, game.width, game.height, boardElement)}
 				src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)}
 				alt=""
 				draggable="false"
