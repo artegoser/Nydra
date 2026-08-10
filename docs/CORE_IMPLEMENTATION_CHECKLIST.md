@@ -112,16 +112,16 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 5 — Rules and presentation registration
 
-- [ ] Define generic entity-rule interface.
-- [ ] Define generic ruleset/game-rule interface.
-- [ ] Reserve a clean ability-rule extension point.
-- [ ] Implement rule/type registry without spreading centralized matches through core.
-- [ ] Provide rule context with current state.
-- [ ] Provide rule context with history.
-- [ ] Provide rule context with current turn session/steps.
-- [ ] Define frontend-facing entity presentation metadata.
-- [ ] Ensure presentation can depend on current entity/state context.
-- [ ] Test registering a non-chess test entity without modifying core.
+- [x] Define generic entity-rule interface.
+- [x] Define generic ruleset/game-rule interface.
+- [x] Reserve a clean ability-rule extension point.
+- [x] Implement rule/type registry without spreading centralized matches through core.
+- [x] Provide rule context with current state.
+- [x] Provide rule context with history.
+- [x] Provide rule context with current turn session/steps.
+- [x] Define frontend-facing entity presentation metadata.
+- [x] Ensure presentation can depend on current entity/state context.
+- [x] Test registering a non-chess test entity without modifying core.
 
 ## Phase 6 — Standard chess pieces
 

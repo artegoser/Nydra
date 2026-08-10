@@ -6,6 +6,7 @@ mod error;
 mod history;
 mod interaction;
 mod ids;
+mod rules;
 mod state;
 mod transaction;
 mod value;
@@ -20,6 +21,10 @@ pub use interaction::{
     InteractionError, InteractionFlow, InteractionRules, InteractionUpdate,
 };
 pub use ids::{AbilityId, ChoiceId, EntityId, EntityTypeId, PlayerId, TeamId};
+pub use rules::{
+    AbilityRule, EntityPresentation, EntityRule, EntityRuleContext, GameRule, RuleContext,
+    RuleError, RuleRegistry,
+};
 pub use state::{
     EntityData, EntityState, EntityStore, GameState, PlayerData, PlayerState, PlayerStore,
     RulesetState, TeamData, TeamState, TeamStore, TurnData, TurnState,
@@ -598,6 +603,183 @@ mod tests {
             change,
             StateChange::EntityAdded { entity } if entity.id == added
         )));
+    }
+
+
+    struct TestEntityRule;
+
+    impl EntityRule for TestEntityRule {
+        fn presentation(
+            &self,
+            context: EntityRuleContext<'_>,
+        ) -> Result<EntityPresentation, RuleError> {
+            let charged = context
+                .entity()
+                .state
+                .get("charged")
+                .and_then(StateValue::as_bool)
+                .unwrap_or(false);
+            let history_len = context.history().map(History::len).unwrap_or(0);
+            let turn_steps = context.turn().map(|turn| turn.steps.len()).unwrap_or(0);
+            let mut data = StateMap::new();
+            data.insert("history_len", history_len as u64);
+            data.insert("turn_steps", turn_steps as u64);
+            Ok(EntityPresentation::new(if charged {
+                "test/charged"
+            } else {
+                "test/idle"
+            })
+            .with_data(data))
+        }
+    }
+
+    struct TestAbilityRule;
+
+    impl AbilityRule for TestAbilityRule {
+        fn execute(
+            &self,
+            context: RuleContext<'_>,
+            actor: EntityId,
+            transaction: &mut Transaction,
+            _input: &StateMap,
+        ) -> Result<(), RuleError> {
+            // Proves the rule can read the source world while mutating an
+            // independent transaction working copy.
+            let old_position = context.entity(actor)?.position;
+            transaction.entity_mut(actor)?.state.insert("used", true);
+            transaction
+                .entity_mut(actor)?
+                .state
+                .insert("old_x", u64::from(old_position.x));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn registry_accepts_non_chess_entity_and_state_dependent_presentation() {
+        let mut state = sample_state();
+        let entity = EntityId::new(40);
+        let entity_type = EntityTypeId::new(99);
+        let mut test_entity = EntityState::new(
+            entity,
+            entity_type,
+            PlayerId::new(1),
+            Position::new(1, 1),
+        );
+        test_entity.state.insert("charged", true);
+        state.add_entity(test_entity).unwrap();
+
+        let mut registry = RuleRegistry::new();
+        registry.register_entity(entity_type, TestEntityRule).unwrap();
+
+        let presentation = registry
+            .presentation(RuleContext::from_state(&state, None), entity)
+            .unwrap();
+        assert_eq!(presentation.asset_key, "test/charged");
+        assert_eq!(
+            presentation
+                .data
+                .get("history_len")
+                .and_then(StateValue::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            registry.register_entity(entity_type, TestEntityRule),
+            Err(RuleError::DuplicateEntityRule(entity_type))
+        );
+    }
+
+    #[test]
+    fn rule_context_exposes_history_and_current_turn_steps() {
+        let mut state = sample_state();
+        let entity = EntityId::new(41);
+        let entity_type = EntityTypeId::new(100);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                entity_type,
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+
+        let mut timeline = GameTimeline::new(state).unwrap();
+        let mut first = timeline.begin_turn(PlayerId::new(1)).unwrap();
+        first
+            .apply_step(RecordedAction::new("move"), |state| {
+                state.move_entity(entity, Position::new(1, 0))
+            })
+            .unwrap();
+        timeline.commit_turn(first).unwrap();
+
+        let mut current_turn = timeline.begin_turn(PlayerId::new(1)).unwrap();
+        current_turn
+            .apply_step(RecordedAction::new("mark"), |state| {
+                state.entity_mut(entity)?.state.insert("charged", true);
+                Ok(())
+            })
+            .unwrap();
+
+        let mut registry = RuleRegistry::new();
+        registry.register_entity(entity_type, TestEntityRule).unwrap();
+        let presentation = registry
+            .presentation(
+                RuleContext::from_turn(&current_turn, Some(timeline.history())),
+                entity,
+            )
+            .unwrap();
+
+        assert_eq!(
+            presentation
+                .data
+                .get("history_len")
+                .and_then(StateValue::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            presentation
+                .data
+                .get("turn_steps")
+                .and_then(StateValue::as_u64),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn registered_ability_can_mutate_transactional_world() {
+        let mut state = sample_state();
+        let entity = EntityId::new(42);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(101),
+                PlayerId::new(1),
+                Position::new(2, 0),
+            ))
+            .unwrap();
+        let ability = AbilityId::new(12);
+        let mut registry = RuleRegistry::new();
+        registry.register_ability(ability, TestAbilityRule).unwrap();
+
+        let context = RuleContext::from_state(&state, None);
+        let mut transaction = Transaction::new(&state);
+        registry
+            .ability_rule(ability)
+            .unwrap()
+            .execute(context, entity, &mut transaction, &StateMap::new())
+            .unwrap();
+        let outcome = transaction.finish().unwrap();
+
+        assert_eq!(
+            outcome
+                .state
+                .entity(entity)
+                .unwrap()
+                .state
+                .get("used")
+                .and_then(StateValue::as_bool),
+            Some(true)
+        );
     }
 
 }
