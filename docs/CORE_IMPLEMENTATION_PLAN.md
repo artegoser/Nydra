@@ -775,9 +775,13 @@ Expose the stable `GameHandle`, DTOs, interaction calls, transition/change views
 
 Replace TypeScript piece/FEN/game-state authority with the WASM game handle while preserving existing board rendering/assets where practical.
 
-### Phase 13 — Interactive local chess UI
+### Phase 13 — Lichess-parity interactive local chess UI
 
-Complete selection, highlights, promotion UI, animations, status, history, undo/redo, FEN development controls, and local two-player play.
+Replace the temporary click-only board interaction layer with a first-class board UX that matches the standard Lichess game board as closely as practical while remaining an independent GloriChess implementation. The detailed contract lives in [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md).
+
+Phase 13 must include both click-to-move and drag-and-drop, Lichess-style quiet/capture destination markers, selected/last-move/check/hover states, drag threshold + ghost + cancellation semantics, StateDelta-driven move/capture/special-move animations, board-local graphical promotion choices, orientation-safe hit testing, responsive geometry, status/history/undo/redo/FEN development controls, and complete local two-player play.
+
+The frontend may own pointer/touch mechanics and visual state, but Rust/WASM remains the sole authority for legal destinations and committed state transitions. No Lichess board package is added as a dependency and no upstream implementation is copied into the project.
 
 ### Phase 14 — Correctness suite
 
@@ -804,7 +808,8 @@ The milestone is complete when:
 7. history is available to rules and supports undo/redo;
 8. the generic turn runtime supports multiple sequential steps even though normal chess mostly uses one;
 9. the frontend receives structural change traces for animation;
-10. perft and special-rule regression suites pass;
-11. test-only custom rules prove that adding future non-chess entities/abilities does not require changing the generic core.
+10. the standard chess board matches the Lichess move interaction loop: click + drag, distinct quiet/capture targets, selected/last-move/check feedback, drag ghost/cancellation, and smooth special-move animation;
+11. perft and special-rule regression suites pass;
+12. test-only custom rules prove that adding future non-chess entities/abilities does not require changing the generic core.
 
 Only after these conditions are met should work begin on AI/search, multiplayer authority, dynamic/user-defined pieces, procedural abilities, or additional game modes.

@@ -10,6 +10,7 @@ GloriChess is a local-first board-game runtime and Svelte UI. The current implem
 - `src` — SvelteKit presentation and input layer.
 - `docs/CORE_IMPLEMENTATION_PLAN.md` — architecture and implementation plan.
 - `docs/CORE_IMPLEMENTATION_CHECKLIST.md` — implementation checklist.
+- `docs/LICHESS_BOARD_UX_SPEC.md` — Lichess board interaction and visual parity specification.
 
 ## Requirements
 
