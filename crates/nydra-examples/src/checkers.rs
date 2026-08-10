@@ -21,6 +21,87 @@ struct CheckerMove {
 
 pub struct CheckerRule;
 
+impl CheckerRule {
+    fn directions(entity: &EntityState) -> &'static [(i16, i16)] {
+        const WHITE_DIRS: [(i16, i16); 2] = [(-1, 1), (1, 1)];
+        const BLACK_DIRS: [(i16, i16); 2] = [(-1, -1), (1, -1)];
+        const KING_DIRS: [(i16, i16); 4] = [(-1, 1), (1, 1), (-1, -1), (1, -1)];
+        if is_king(entity) {
+            &KING_DIRS
+        } else if entity.owner == WHITE {
+            &WHITE_DIRS
+        } else {
+            &BLACK_DIRS
+        }
+    }
+
+    fn captures(
+        state: &GameState,
+        actor: EntityId,
+    ) -> Result<Vec<CheckerMove>, InteractionError> {
+        let entity = state.entity(actor)?;
+        let mut moves = Vec::new();
+        for &(dx, dy) in Self::directions(entity) {
+            let Some(middle) = offset(entity.position, dx, dy) else {
+                continue;
+            };
+            let Some(to) = offset(entity.position, dx * 2, dy * 2) else {
+                continue;
+            };
+            if state.entity_at(to)?.is_some() {
+                continue;
+            }
+            let Some(victim) = state.entity_at(middle)? else {
+                continue;
+            };
+            if victim.owner == entity.owner {
+                continue;
+            }
+            moves.push(CheckerMove {
+                actor,
+                to,
+                capture: Some(victim.id),
+            });
+        }
+        Ok(moves)
+    }
+
+    fn quiet_moves(
+        state: &GameState,
+        actor: EntityId,
+    ) -> Result<Vec<CheckerMove>, InteractionError> {
+        let entity = state.entity(actor)?;
+        let mut moves = Vec::new();
+        for &(dx, dy) in Self::directions(entity) {
+            let Some(to) = offset(entity.position, dx, dy) else {
+                continue;
+            };
+            if state.entity_at(to)?.is_none() {
+                moves.push(CheckerMove {
+                    actor,
+                    to,
+                    capture: None,
+                });
+            }
+        }
+        Ok(moves)
+    }
+
+    fn promote_if_needed(
+        state: &mut GameState,
+        actor: EntityId,
+    ) -> Result<bool, InteractionError> {
+        let entity = state.entity(actor)?;
+        let should_promote = !is_king(entity)
+            && ((entity.owner == WHITE && entity.position.y == 7)
+                || (entity.owner == BLACK && entity.position.y == 0));
+        if should_promote {
+            state.entity_mut(actor)?.state.insert(KING, true);
+        }
+        Ok(should_promote)
+    }
+}
+
 impl EntityRule for CheckerRule {
     fn presentation(
         &self,
@@ -91,19 +172,6 @@ fn is_king(entity: &EntityState) -> bool {
         .unwrap_or(false)
 }
 
-fn directions(entity: &EntityState) -> &'static [(i16, i16)] {
-    const WHITE_DIRS: [(i16, i16); 2] = [(-1, 1), (1, 1)];
-    const BLACK_DIRS: [(i16, i16); 2] = [(-1, -1), (1, -1)];
-    const KING_DIRS: [(i16, i16); 4] = [(-1, 1), (1, 1), (-1, -1), (1, -1)];
-    if is_king(entity) {
-        &KING_DIRS
-    } else if entity.owner == WHITE {
-        &WHITE_DIRS
-    } else {
-        &BLACK_DIRS
-    }
-}
-
 fn offset(position: Position, dx: i16, dy: i16) -> Option<Position> {
     let x = i32::from(position.x) + i32::from(dx);
     let y = i32::from(position.y) + i32::from(dy);
@@ -113,54 +181,6 @@ fn offset(position: Position, dx: i16, dy: i16) -> Option<Position> {
     Some(Position::new(u16::try_from(x).ok()?, u16::try_from(y).ok()?))
 }
 
-fn captures_for(state: &GameState, actor: EntityId) -> Result<Vec<CheckerMove>, InteractionError> {
-    let entity = state.entity(actor)?;
-    let mut moves = Vec::new();
-    for &(dx, dy) in directions(entity) {
-        let Some(middle) = offset(entity.position, dx, dy) else {
-            continue;
-        };
-        let Some(to) = offset(entity.position, dx * 2, dy * 2) else {
-            continue;
-        };
-        if state.entity_at(to)?.is_some() {
-            continue;
-        }
-        let Some(victim) = state.entity_at(middle)? else {
-            continue;
-        };
-        if victim.owner == entity.owner {
-            continue;
-        }
-        moves.push(CheckerMove {
-            actor,
-            to,
-            capture: Some(victim.id),
-        });
-    }
-    Ok(moves)
-}
-
-fn quiet_moves_for(
-    state: &GameState,
-    actor: EntityId,
-) -> Result<Vec<CheckerMove>, InteractionError> {
-    let entity = state.entity(actor)?;
-    let mut moves = Vec::new();
-    for &(dx, dy) in directions(entity) {
-        let Some(to) = offset(entity.position, dx, dy) else {
-            continue;
-        };
-        if state.entity_at(to)?.is_none() {
-            moves.push(CheckerMove {
-                actor,
-                to,
-                capture: None,
-            });
-        }
-    }
-    Ok(moves)
-}
 
 fn captures_for_player(
     state: &GameState,
@@ -172,7 +192,7 @@ fn captures_for_player(
         .values()
         .filter(|entity| entity.controller == player && entity.entity_type == CHECKER)
     {
-        captures.extend(captures_for(state, entity.id)?);
+        captures.extend(CheckerRule::captures(state, entity.id)?);
     }
     Ok(captures)
 }
@@ -191,7 +211,7 @@ fn legal_moves_for_player(
         .values()
         .filter(|entity| entity.controller == player && entity.entity_type == CHECKER)
     {
-        moves.extend(quiet_moves_for(state, entity.id)?);
+        moves.extend(CheckerRule::quiet_moves(state, entity.id)?);
     }
     Ok(moves)
 }
@@ -246,17 +266,6 @@ fn actor_from_choice(choice: &Choice) -> Result<EntityId, InteractionError> {
         .ok_or_else(|| InteractionError::RuleViolation("checkers move has no actor".into()))
 }
 
-fn promote_if_needed(state: &mut GameState, actor: EntityId) -> Result<bool, InteractionError> {
-    let entity = state.entity(actor)?;
-    let should_promote = !is_king(entity)
-        && ((entity.owner == WHITE && entity.position.y == 7)
-            || (entity.owner == BLACK && entity.position.y == 0));
-    if should_promote {
-        state.entity_mut(actor)?.state.insert(KING, true);
-    }
-    Ok(should_promote)
-}
-
 pub struct CheckersInteractionRules;
 
 impl InteractionRules for CheckersInteractionRules {
@@ -267,7 +276,7 @@ impl InteractionRules for CheckersInteractionRules {
     ) -> Result<Vec<ChoiceSpec>, InteractionError> {
         let player = active_player(&turn.working)?;
         if let Some(forced) = draft_entity(draft, FORCED) {
-            return Ok(captures_for(&turn.working, forced)?
+            return Ok(CheckerRule::captures(&turn.working, forced)?
                 .into_iter()
                 .map(move_choice)
                 .collect());
@@ -343,7 +352,7 @@ impl InteractionRules for CheckersInteractionRules {
                 }
 
                 let legal = if draft_entity(draft, FORCED).is_some() {
-                    captures_for(&turn.working, actor)?
+                    CheckerRule::captures(&turn.working, actor)?
                 } else {
                     legal_moves_for_player(&turn.working, player)?
                         .into_iter()
@@ -366,7 +375,7 @@ impl InteractionRules for CheckersInteractionRules {
                                 transaction.remove_entity(capture)?;
                             }
                             transaction.move_entity(actor, position)?;
-                            let promoted = promote_if_needed(transaction.raw_state_mut(), actor)?;
+                            let promoted = CheckerRule::promote_if_needed(transaction.raw_state_mut(), actor)?;
                             if promoted {
                                 let mut data = StateMap::new();
                                 data.insert("entity", u64::from(actor.get()));
@@ -376,7 +385,7 @@ impl InteractionRules for CheckersInteractionRules {
                             }
                             let has_more_capture = movement.capture.is_some()
                                 && !promoted
-                                && !captures_for(transaction.state(), actor)?.is_empty();
+                                && !CheckerRule::captures(transaction.state(), actor)?.is_empty();
                             if !has_more_capture {
                                 transaction
                                     .raw_state_mut()

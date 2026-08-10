@@ -32,6 +32,38 @@ const MODE: &str = "rift.mode";
 
 pub struct MageRule;
 
+impl MageRule {
+    fn move_choices(
+        state: &GameState,
+        entity: EntityId,
+    ) -> Result<Vec<ChoiceSpec>, InteractionError> {
+        let position = state.entity(entity)?.position;
+        let candidates = [
+            (i32::from(position.x) - 1, i32::from(position.y)),
+            (i32::from(position.x) + 1, i32::from(position.y)),
+            (i32::from(position.x), i32::from(position.y) - 1),
+            (i32::from(position.x), i32::from(position.y) + 1),
+        ];
+        let mut choices = Vec::new();
+        for (x, y) in candidates {
+            if x < 0 || y < 0 {
+                continue;
+            }
+            let Ok(x) = u16::try_from(x) else {
+                continue;
+            };
+            let Ok(y) = u16::try_from(y) else {
+                continue;
+            };
+            let position = Position::new(x, y);
+            if state.board.contains(position) && state.entity_at(position)?.is_none() {
+                choices.push(ChoiceSpec::position(position));
+            }
+        }
+        Ok(choices)
+    }
+}
+
 impl EntityRule for MageRule {
     fn presentation(
         &self,
@@ -351,36 +383,6 @@ fn draft_ability(draft: &StateMap) -> Option<AbilityId> {
         .map(AbilityId::new)
 }
 
-fn adjacent_empty_positions(
-    state: &GameState,
-    entity: EntityId,
-) -> Result<Vec<Position>, InteractionError> {
-    let position = state.entity(entity)?.position;
-    let candidates = [
-        (i32::from(position.x) - 1, i32::from(position.y)),
-        (i32::from(position.x) + 1, i32::from(position.y)),
-        (i32::from(position.x), i32::from(position.y) - 1),
-        (i32::from(position.x), i32::from(position.y) + 1),
-    ];
-    let mut positions = Vec::new();
-    for (x, y) in candidates {
-        if x < 0 || y < 0 {
-            continue;
-        }
-        let Ok(x) = u16::try_from(x) else {
-            continue;
-        };
-        let Ok(y) = u16::try_from(y) else {
-            continue;
-        };
-        let position = Position::new(x, y);
-        if state.board.contains(position) && state.entity_at(position)?.is_none() {
-            positions.push(position);
-        }
-    }
-    Ok(positions)
-}
-
 fn rule_error(error: RuleError) -> InteractionError {
     InteractionError::RuleViolation(error.to_string())
 }
@@ -499,10 +501,7 @@ impl InteractionRules for RiftInteractionRules {
             .and_then(StateValue::as_bool)
             .unwrap_or(false)
         {
-            return Ok(adjacent_empty_positions(&turn.working, actor)?
-                .into_iter()
-                .map(ChoiceSpec::position)
-                .collect());
+            return Ok(MageRule::move_choices(&turn.working, actor)?);
         }
 
         if let Some(ability) = draft_ability(draft) {
@@ -555,7 +554,9 @@ impl InteractionRules for RiftInteractionRules {
                     .get(MOVED)
                     .and_then(StateValue::as_bool)
                     .unwrap_or(false)
-                    || !adjacent_empty_positions(&turn.working, actor)?.contains(position)
+                    || !MageRule::move_choices(&turn.working, actor)?
+                    .iter()
+                    .any(|choice| matches!(choice.kind, ChoiceKind::SelectPosition { position: candidate } if candidate == *position))
                 {
                     return Err(InteractionError::RuleViolation("illegal Rift move".into()));
                 }
