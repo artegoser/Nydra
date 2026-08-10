@@ -4,11 +4,11 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "pnpm wasm:build && vite dev",
-		"build": "pnpm wasm:build && vite build",
+		"dev": "NODE_ENV=development pnpm wasm:build && NODE_ENV=development vite dev",
+		"build": "NODE_ENV=production pnpm wasm:build && NODE_ENV=production vite build",
 		"preview": "vite preview",
-		"check": "pnpm wasm:build && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "pnpm wasm:build && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"check": "NODE_ENV=development pnpm wasm:build && NODE_ENV=development svelte-kit sync && NODE_ENV=development svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "NODE_ENV=development pnpm wasm:build && NODE_ENV=development svelte-kit sync && NODE_ENV=development svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
 		"db:push": "drizzle-kit push",
@@ -20,11 +20,12 @@
 		"rust:check": "cargo check --workspace",
 		"wasm:build": "wasm-pack build crates/glorichess-wasm --target web --out-dir ../../src/lib/wasm/pkg --out-name glorichess",
 		"test": "cargo test --workspace && pnpm check",
-		"test:full": "cargo test --workspace && cargo test --release -p glorichess-chess perft::tests:: -- --ignored && cargo check --workspace && cargo clippy --workspace --all-targets --all-features && pnpm check && vite build"
+		"test:full": "cargo test --workspace && cargo test --release -p glorichess-chess perft::tests:: -- --ignored && cargo check --workspace && cargo clippy --workspace --all-targets --all-features && pnpm check && NODE_ENV=production vite build",
+		"browserslist:update": "pnpm dlx update-browserslist-db latest"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.3",
-		"@sveltejs/adapter-auto": "^3.0.0",
+		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.9.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
 		"autoprefixer": "^10.4.20",

@@ -505,7 +505,7 @@
 		{/each}
 	</div>
 
-	<div class="hit-layer" role="grid" aria-label="Chess board" on:contextmenu|preventDefault>
+	<div class="hit-layer" role="group" aria-label="Chess board">
 		{#each { length: game.height } as _, row}
 			{#each { length: game.width } as _, col}
 				{@const x = orientation === 'white' ? col : game.width - col - 1}
@@ -520,6 +520,7 @@
 					aria-label={entity?.label ? `${entity.label} on ${x + 1},${y + 1}` : `Square ${x + 1},${y + 1}`}
 					on:pointerenter={() => handleSquareEnter(position)}
 					on:pointerleave={() => handleSquareLeave(position)}
+					on:contextmenu|preventDefault
 					on:pointerdown={(event) => handlePointerDown(event, position)}
 					on:click={() => handleSquareClick(position)}
 				></button>
