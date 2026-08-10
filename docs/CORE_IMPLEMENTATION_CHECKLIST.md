@@ -37,25 +37,25 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 1 — Generic world state
 
-- [ ] Implement `PlayerId`.
-- [ ] Implement `TeamId`.
-- [ ] Implement `EntityId`.
-- [ ] Implement `EntityTypeId`.
-- [ ] Implement `AbilityId`.
-- [ ] Implement `ChoiceId`.
-- [ ] Implement rectangular `Position`/coordinate primitives.
-- [ ] Implement rectangular `Board`.
-- [ ] Implement entity placement lookup.
-- [ ] Implement `PlayerState`/player store.
-- [ ] Implement `TeamState`/team store.
-- [ ] Implement `EntityState`/entity store.
-- [ ] Add entity `owner`.
-- [ ] Add entity `controller`.
-- [ ] Add entity `move_count`.
-- [ ] Add extensible entity-local state storage.
-- [ ] Add ruleset-local state extension point.
-- [ ] Define and enforce core state invariants.
-- [ ] Unit-test board/entity/player/team operations.
+- [x] Implement `PlayerId`.
+- [x] Implement `TeamId`.
+- [x] Implement `EntityId`.
+- [x] Implement `EntityTypeId`.
+- [x] Implement `AbilityId`.
+- [x] Implement `ChoiceId`.
+- [x] Implement rectangular `Position`/coordinate primitives.
+- [x] Implement rectangular `Board`.
+- [x] Implement entity placement lookup.
+- [x] Implement `PlayerState`/player store.
+- [x] Implement `TeamState`/team store.
+- [x] Implement `EntityState`/entity store.
+- [x] Add entity `owner`.
+- [x] Add entity `controller`.
+- [x] Add entity `move_count`.
+- [x] Add extensible entity-local state storage.
+- [x] Add ruleset-local state extension point.
+- [x] Define and enforce core state invariants.
+- [x] Unit-test board/entity/player/team operations.
 
 ## Phase 2 — History and turn sessions
 
