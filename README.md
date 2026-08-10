@@ -12,6 +12,7 @@ GloriChess is a local-first board-game runtime and Svelte UI. The current implem
 - `docs/CORE_IMPLEMENTATION_CHECKLIST.md` — implementation checklist.
 - `docs/LICHESS_BOARD_UX_SPEC.md` — Lichess board interaction and visual parity specification.
 - `docs/GENERIC_ACTION_NOTATION.md` — ruleset-agnostic action recording and deterministic replay specification.
+- `docs/GENERIC_OUTCOME_RULES.md` — ruleset-wide terminal outcome contract and precedence rules.
 
 ## Requirements
 
@@ -79,3 +80,4 @@ See:
 - [`docs/CORE_IMPLEMENTATION_PLAN.md`](docs/CORE_IMPLEMENTATION_PLAN.md)
 - [`docs/CORE_IMPLEMENTATION_CHECKLIST.md`](docs/CORE_IMPLEMENTATION_CHECKLIST.md)
 - [`docs/GENERIC_ACTION_NOTATION.md`](docs/GENERIC_ACTION_NOTATION.md)
+- [`docs/GENERIC_OUTCOME_RULES.md`](docs/GENERIC_OUTCOME_RULES.md)

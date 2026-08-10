@@ -165,6 +165,10 @@ impl ChessRules {
         rules
     }
 
+    pub fn outcome_rule(&self) -> crate::ChessOutcomeRule {
+        crate::ChessOutcomeRule::new(self.clone())
+    }
+
     pub fn register<R>(&mut self, rule: R) -> Result<(), ChessError>
     where
         R: ChessPieceRule + 'static,

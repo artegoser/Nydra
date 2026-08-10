@@ -472,6 +472,19 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [x] Import standard PGN main line.
 - [x] Test PGN/FEN interoperability where applicable.
 
+## Generic outcome architecture
+
+Reference: [`GENERIC_OUTCOME_RULES.md`](./GENERIC_OUTCOME_RULES.md).
+
+- [x] Add generic `GameOutcome` without chess-specific variants.
+- [x] Support winner/loser players and teams plus extensible outcome data.
+- [x] Add ruleset-level `OutcomeRule`.
+- [x] Register multiple outcome rules with explicit deterministic precedence.
+- [x] Keep terminal decisions out of `EntityRule`.
+- [x] Add a core test proving first-matching outcome-rule precedence.
+- [x] Adapt standard chess outcomes through `ChessOutcomeRule`.
+- [x] Prove chess checkmate maps to the generic outcome contract.
+
 ## Phase 16 — Architecture proof
 
 Create internal/test-only non-chess rules. Do not expose them as a product mode yet.
@@ -531,6 +544,7 @@ Reference: [`GENERIC_ACTION_NOTATION.md`](./GENERIC_ACTION_NOTATION.md).
 - [ ] Perft/regression suites pass.
 - [ ] Architecture-proof tests pass.
 - [ ] Generic action records replay arbitrary accepted choice sequences through the same authoritative interaction runtime.
+- [x] Generic terminal outcomes are ruleset-level and independent of entity-rule implementations.
 - [ ] No AI/search engine has been added yet.
 - [ ] No multiplayer/server implementation has been added yet.
 - [ ] No user-facing dynamic-piece DSL/runtime has been added yet.

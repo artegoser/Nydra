@@ -21,7 +21,7 @@ pub use game::{
 };
 pub use interaction::ChessInteractionRules;
 pub use notation::PgnGame;
-pub use outcome::{ChessDrawClaim, ChessOutcome, ChessStatus, PositionKey};
+pub use outcome::{ChessDrawClaim, ChessOutcome, ChessOutcomeRule, ChessStatus, PositionKey};
 pub use piece::{
     ChessMoveKind, ChessPieceContext, ChessPieceKind, ChessPieceRule, PseudoMove, BISHOP, KING, KNIGHT, PAWN,
     QUEEN, ROOK,
@@ -40,6 +40,7 @@ mod tests {
     use super::*;
     use glorichess_core::{
         EntityId, EntityRule, EntityState, EntityTypeId, PlayerId, Position, RuleContext,
+        RuleRegistry,
     };
     use std::collections::BTreeSet;
 
@@ -795,6 +796,15 @@ mod tests {
                 loser: BLACK_PLAYER,
             })
         );
+        let mut generic_rules = RuleRegistry::new();
+        generic_rules.register_outcome(rules.outcome_rule());
+        let generic = generic_rules
+            .outcome(RuleContext::from_state(&mate, Some(&history)))
+            .unwrap()
+            .unwrap();
+        assert_eq!(generic.key, "chess.checkmate");
+        assert_eq!(generic.winners, vec![WHITE_PLAYER]);
+        assert_eq!(generic.losers, vec![BLACK_PLAYER]);
 
         let mut stalemate = empty_chess_state().unwrap();
         add_piece(&mut stalemate, 1, KING, ChessSide::White, Position::new(5, 6));

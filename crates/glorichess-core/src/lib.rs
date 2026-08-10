@@ -22,8 +22,8 @@ pub use interaction::{
     InteractionError, InteractionFlow, InteractionRules, InteractionUpdate,
 };
 pub use rules::{
-    AbilityRule, EntityPresentation, EntityRule, EntityRuleContext, GameRule, RuleContext,
-    RuleError, RuleRegistry,
+    AbilityRule, EntityPresentation, EntityRule, EntityRuleContext, GameOutcome, GameRule,
+    OutcomeRule, RuleContext, RuleError, RuleRegistry,
 };
 pub use state::{
     EntityData, EntityState, EntityStore, GameState, PlayerData, PlayerState, PlayerStore,
@@ -698,6 +698,34 @@ mod tests {
         }
     }
 
+    struct FlagOutcomeRule {
+        key: &'static str,
+        flag: &'static str,
+        winner: Option<PlayerId>,
+    }
+
+    impl OutcomeRule for FlagOutcomeRule {
+        fn evaluate(
+            &self,
+            context: RuleContext<'_>,
+        ) -> Result<Option<GameOutcome>, RuleError> {
+            let active = context
+                .state()
+                .ruleset_state
+                .get(self.flag)
+                .and_then(StateValue::as_bool)
+                .unwrap_or(false);
+            if !active {
+                return Ok(None);
+            }
+            let mut outcome = GameOutcome::new(self.key);
+            if let Some(winner) = self.winner {
+                outcome = outcome.with_winner(winner);
+            }
+            Ok(Some(outcome))
+        }
+    }
+
     struct TestAbilityRule;
 
     impl AbilityRule for TestAbilityRule {
@@ -808,6 +836,34 @@ mod tests {
                 .and_then(StateValue::as_u64),
             Some(1)
         );
+    }
+
+    #[test]
+    fn outcome_registry_is_ruleset_wide_and_uses_registration_precedence() {
+        let mut state = sample_state();
+        state.ruleset_state.insert("fallback_finished", true);
+        state.ruleset_state.insert("primary_finished", true);
+
+        let mut registry = RuleRegistry::new();
+        registry.register_outcome(FlagOutcomeRule {
+            key: "test.primary",
+            flag: "primary_finished",
+            winner: Some(PlayerId::new(1)),
+        });
+        registry.register_outcome(FlagOutcomeRule {
+            key: "test.fallback",
+            flag: "fallback_finished",
+            winner: Some(PlayerId::new(2)),
+        });
+
+        assert_eq!(registry.outcome_rule_count(), 2);
+        let outcome = registry
+            .outcome(RuleContext::from_state(&state, None))
+            .unwrap()
+            .unwrap();
+        assert_eq!(outcome.key, "test.primary");
+        assert_eq!(outcome.winners, vec![PlayerId::new(1)]);
+        assert!(outcome.losers.is_empty());
     }
 
     #[test]

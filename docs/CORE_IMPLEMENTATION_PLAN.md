@@ -790,6 +790,10 @@ Complete perft and special-rule regression coverage. Fix all discrepancies befor
 
 Add SAN move generation and PGN import/export after legal move semantics and history are stable.
 
+### Generic ruleset outcome architecture
+
+Game completion is represented by core `OutcomeRule` implementations evaluated at ruleset scope, not by `EntityRule`. Entity rules may expose local semantic state that outcome rules inspect, but only the ruleset decides whether a state is terminal. `RuleRegistry` evaluates registered outcome rules in explicit registration order and returns the first `GameOutcome`. Standard chess exposes `ChessOutcomeRule` as an adapter over its existing checkmate/stalemate/draw evaluator. See [`GENERIC_OUTCOME_RULES.md`](./GENERIC_OUTCOME_RULES.md).
+
 ### Phase 16 — Architecture proof
 
 Add test-only non-chess rules that prove custom state, explicit abilities, multi-step turns, history-dependent behavior, multiple players, and control changes work without modifying core architecture.
@@ -818,5 +822,6 @@ The milestone is complete when:
 11. perft and special-rule regression suites pass;
 12. test-only custom rules prove that adding future non-chess entities/abilities does not require changing the generic core;
 13. a canonical generic action record can replay arbitrary accepted choice sequences through the same interaction runtime.
+14. terminal conditions can be supplied as generic ruleset-level outcome rules without modifying entity rules or core enums.
 
 Only after these conditions are met should work begin on AI/search, multiplayer authority, dynamic/user-defined pieces, procedural abilities, or additional game modes.

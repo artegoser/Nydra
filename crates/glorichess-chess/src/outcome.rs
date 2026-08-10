@@ -4,7 +4,8 @@ use crate::{
     ChessRules, ChessSide, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK,
 };
 use glorichess_core::{
-    EntityTypeId, GameState, History, PlayerId, Position, StateValue, TurnRecord,
+    EntityTypeId, GameOutcome, GameState, History, OutcomeRule, PlayerId, Position, RuleContext,
+    RuleError, StateValue, TurnRecord,
 };
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +34,50 @@ pub enum ChessOutcome {
     FiftyMoveRule,
     SeventyFiveMoveRule,
     DeadPosition,
+}
+
+
+#[derive(Clone)]
+pub struct ChessOutcomeRule {
+    rules: ChessRules,
+}
+
+impl ChessOutcomeRule {
+    pub fn new(rules: ChessRules) -> Self {
+        Self { rules }
+    }
+}
+
+impl OutcomeRule for ChessOutcomeRule {
+    fn evaluate(&self, context: RuleContext<'_>) -> Result<Option<GameOutcome>, RuleError> {
+        let empty_history = History::default();
+        let history = context.history().unwrap_or(&empty_history);
+        let status = self
+            .rules
+            .status(context.state(), history)
+            .map_err(|error| RuleError::Rejected(error.to_string()))?;
+        Ok(status.outcome.as_ref().map(ChessOutcome::as_game_outcome))
+    }
+}
+
+impl ChessOutcome {
+    pub fn as_game_outcome(&self) -> GameOutcome {
+        match self {
+            ChessOutcome::Checkmate { winner, loser } => GameOutcome::new("chess.checkmate")
+                .with_winner(*winner)
+                .with_loser(*loser),
+            ChessOutcome::Stalemate => GameOutcome::new("chess.stalemate"),
+            ChessOutcome::Resignation { winner, loser } => GameOutcome::new("chess.resignation")
+                .with_winner(*winner)
+                .with_loser(*loser),
+            ChessOutcome::DrawAgreement => GameOutcome::new("chess.draw_agreement"),
+            ChessOutcome::ThreefoldRepetition => GameOutcome::new("chess.threefold_repetition"),
+            ChessOutcome::FivefoldRepetition => GameOutcome::new("chess.fivefold_repetition"),
+            ChessOutcome::FiftyMoveRule => GameOutcome::new("chess.fifty_move_rule"),
+            ChessOutcome::SeventyFiveMoveRule => GameOutcome::new("chess.seventy_five_move_rule"),
+            ChessOutcome::DeadPosition => GameOutcome::new("chess.dead_position"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,10 +1,59 @@
 use crate::{
     AbilityId, ChoiceSpec, CoreError, EntityId, EntityState, EntityTypeId, GameState, History,
-    PlayerId, StateMap, Transaction, TurnSession,
+    PlayerId, StateMap, TeamId, Transaction, TurnSession,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GameOutcome {
+    /// Stable ruleset-defined reason key, e.g. `chess.checkmate`.
+    pub key: String,
+    pub winners: Vec<PlayerId>,
+    pub losers: Vec<PlayerId>,
+    pub winning_teams: Vec<TeamId>,
+    pub losing_teams: Vec<TeamId>,
+    pub data: StateMap,
+}
+
+impl GameOutcome {
+    pub fn new(key: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            winners: Vec::new(),
+            losers: Vec::new(),
+            winning_teams: Vec::new(),
+            losing_teams: Vec::new(),
+            data: StateMap::new(),
+        }
+    }
+
+    pub fn with_winner(mut self, player: PlayerId) -> Self {
+        self.winners.push(player);
+        self
+    }
+
+    pub fn with_loser(mut self, player: PlayerId) -> Self {
+        self.losers.push(player);
+        self
+    }
+
+    pub fn with_winning_team(mut self, team: TeamId) -> Self {
+        self.winning_teams.push(team);
+        self
+    }
+
+    pub fn with_losing_team(mut self, team: TeamId) -> Self {
+        self.losing_teams.push(team);
+        self
+    }
+
+    pub fn with_data(mut self, data: StateMap) -> Self {
+        self.data = data;
+        self
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EntityPresentation {
@@ -162,6 +211,16 @@ pub trait AbilityRule {
     ) -> Result<(), RuleError>;
 }
 
+/// A terminal ruleset-wide condition. Entity rules may expose local semantics
+/// used by an outcome rule, but deciding whether the game is over belongs to
+/// the ruleset layer.
+///
+/// When multiple outcome rules are registered, registry order is precedence:
+/// the first rule that returns an outcome wins.
+pub trait OutcomeRule {
+    fn evaluate(&self, context: RuleContext<'_>) -> Result<Option<GameOutcome>, RuleError>;
+}
+
 /// Ruleset-wide hooks for constraints that do not belong to one entity.
 pub trait GameRule {
     fn validate(&self, _context: RuleContext<'_>) -> Result<(), RuleError> {
@@ -182,6 +241,7 @@ pub trait GameRule {
 pub struct RuleRegistry {
     entity_rules: BTreeMap<EntityTypeId, Box<dyn EntityRule>>,
     ability_rules: BTreeMap<AbilityId, Box<dyn AbilityRule>>,
+    outcome_rules: Vec<Box<dyn OutcomeRule>>,
     game_rule: Option<Box<dyn GameRule>>,
 }
 
@@ -238,6 +298,26 @@ impl RuleRegistry {
             .get(&ability)
             .map(Box::as_ref)
             .ok_or(RuleError::AbilityRuleNotFound(ability))
+    }
+
+    pub fn register_outcome<R>(&mut self, rule: R)
+    where
+        R: OutcomeRule + 'static,
+    {
+        self.outcome_rules.push(Box::new(rule));
+    }
+
+    pub fn outcome(&self, context: RuleContext<'_>) -> Result<Option<GameOutcome>, RuleError> {
+        for rule in &self.outcome_rules {
+            if let Some(outcome) = rule.evaluate(context)? {
+                return Ok(Some(outcome));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn outcome_rule_count(&self) -> usize {
+        self.outcome_rules.len()
     }
 
     pub fn set_game_rule<R>(&mut self, rule: R)
