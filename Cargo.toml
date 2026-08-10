@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "crates/glorichess-core",
+    "crates/glorichess-chess",
+    "crates/glorichess-wasm",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+repository = "https://github.com/artegoser/glorichess"
+
+[workspace.dependencies]
+glorichess-core = { path = "crates/glorichess-core" }
+glorichess-chess = { path = "crates/glorichess-chess" }
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+thiserror = "2.0"
+wasm-bindgen = "0.2"

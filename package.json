@@ -13,7 +13,13 @@
 		"lint": "prettier --check . && eslint .",
 		"db:push": "drizzle-kit push",
 		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"rust:fmt": "cargo fmt --all --check",
+		"rust:lint": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+		"rust:test": "cargo test --workspace",
+		"rust:check": "cargo check --workspace",
+		"wasm:build": "wasm-pack build crates/glorichess-wasm --target web --out-dir ../../src/lib/wasm/pkg --out-name glorichess",
+		"test": "cargo test --workspace && pnpm check"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.3",

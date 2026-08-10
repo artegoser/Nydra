@@ -25,15 +25,15 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 0 — Repository preparation
 
-- [ ] Add root `Cargo.toml` workspace.
-- [ ] Add `crates/glorichess-core`.
-- [ ] Add `crates/glorichess-chess`.
-- [ ] Add `crates/glorichess-wasm`.
-- [ ] Define workspace dependency/version policy.
-- [ ] Add Rust formatting/lint/test commands.
-- [ ] Add WASM browser build integration skeleton.
-- [ ] Keep the existing Svelte application building during migration.
-- [ ] Document local development/build commands.
+- [x] Add root `Cargo.toml` workspace.
+- [x] Add `crates/glorichess-core`.
+- [x] Add `crates/glorichess-chess`.
+- [x] Add `crates/glorichess-wasm`.
+- [x] Define workspace dependency/version policy.
+- [x] Add Rust formatting/lint/test commands.
+- [x] Add WASM browser build integration skeleton.
+- [x] Keep the existing Svelte application building during migration.
+- [x] Document local development/build commands.
 
 ## Phase 1 — Generic world state
 

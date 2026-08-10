@@ -1,45 +1,72 @@
-# sv
+# GloriChess
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+GloriChess is a local-first board-game runtime and Svelte UI. The current implementation milestone is a generic Rust core that will host complete standard chess rules and compile to WebAssembly for the browser.
 
-## Creating a project
+## Repository layout
 
-If you're seeing this, you've probably already done this step. Congrats!
+- `crates/glorichess-core` — generic state, history, turns, interaction, and runtime primitives.
+- `crates/glorichess-chess` — standard chess rules built on the generic core.
+- `crates/glorichess-wasm` — browser bindings for the Rust runtime.
+- `src` — SvelteKit presentation and input layer.
+- `docs/CORE_IMPLEMENTATION_PLAN.md` — architecture and implementation plan.
+- `docs/CORE_IMPLEMENTATION_CHECKLIST.md` — implementation checklist.
 
-```bash
-# create a new project in the current directory
-npx sv create
+## Requirements
 
-# create a new project in my-app
-npx sv create my-app
-```
+- Node.js 22+
+- pnpm
+- Rust 1.80+
+- `wasm-pack` for browser WASM builds
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
+Install `wasm-pack` if necessary:
 
 ```bash
-npm run build
+cargo install wasm-pack
 ```
 
-You can preview the production build with `npm run preview`.
+## Development
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Install frontend dependencies:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+Run the existing Svelte application:
+
+```bash
+pnpm dev
+```
+
+Build the browser WASM package:
+
+```bash
+pnpm wasm:build
+```
+
+The generated bindings are written to `src/lib/wasm/pkg/` and are not committed.
+
+## Verification
+
+Rust:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace
+```
+
+Frontend:
+
+```bash
+pnpm check
+pnpm lint
+pnpm build
+```
 
 ## Development plan
 
-The Rust/WASM core migration and complete standard-chess implementation are specified in:
+See:
 
 - [`docs/CORE_IMPLEMENTATION_PLAN.md`](docs/CORE_IMPLEMENTATION_PLAN.md)
 - [`docs/CORE_IMPLEMENTATION_CHECKLIST.md`](docs/CORE_IMPLEMENTATION_CHECKLIST.md)
