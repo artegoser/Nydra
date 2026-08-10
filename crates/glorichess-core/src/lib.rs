@@ -4,6 +4,7 @@
 mod board;
 mod error;
 mod history;
+mod interaction;
 mod ids;
 mod state;
 mod value;
@@ -11,6 +12,10 @@ mod value;
 pub use board::{Board, Position};
 pub use error::CoreError;
 pub use history::{GameTimeline, History, RecordedAction, StepRecord, TurnRecord, TurnSession};
+pub use interaction::{
+    recorded_step, Choice, ChoiceIssuer, ChoiceKind, ChoiceSpec, Interaction, InteractionDriver,
+    InteractionError, InteractionFlow, InteractionRules, InteractionUpdate,
+};
 pub use ids::{AbilityId, ChoiceId, EntityId, EntityTypeId, PlayerId, TeamId};
 pub use state::{
     EntityData, EntityState, EntityStore, GameState, PlayerData, PlayerState, PlayerStore,
@@ -242,4 +247,242 @@ mod tests {
         let rolled_back = turn.rollback();
         assert_eq!(rolled_back, state);
     }
+
+    struct ForcedChainRules {
+        entity: EntityId,
+    }
+
+    impl InteractionRules for ForcedChainRules {
+        fn choices(
+            &self,
+            turn: &TurnSession,
+            _draft: &StateMap,
+        ) -> Result<Vec<ChoiceSpec>, InteractionError> {
+            let position = turn.working.entity(self.entity)?.position;
+            let choices = match position.x {
+                0 => vec![ChoiceSpec::position(Position::new(1, 0))],
+                1 => vec![ChoiceSpec::position(Position::new(2, 0))],
+                2 => vec![ChoiceSpec::finish_turn()],
+                _ => return Err(InteractionError::RuleViolation("unexpected chain state".into())),
+            };
+            Ok(choices)
+        }
+
+        fn apply_choice(
+            &self,
+            turn: &mut TurnSession,
+            _draft: &mut StateMap,
+            choice: &Choice,
+        ) -> Result<InteractionFlow, InteractionError> {
+            match choice.kind {
+                ChoiceKind::SelectPosition { position } => {
+                    let entity = self.entity;
+                    turn.apply_step(recorded_step("forced-jump"), |state| {
+                        state.move_entity(entity, position)
+                    })?;
+                    Ok(InteractionFlow::Continue)
+                }
+                ChoiceKind::FinishTurn => Ok(InteractionFlow::FinishTurn),
+                _ => Err(InteractionError::RuleViolation("unexpected choice".into())),
+            }
+        }
+    }
+
+    struct AbilityFlowRules {
+        actor: EntityId,
+        target: EntityId,
+        ability: AbilityId,
+    }
+
+    impl InteractionRules for AbilityFlowRules {
+        fn choices(
+            &self,
+            turn: &TurnSession,
+            draft: &StateMap,
+        ) -> Result<Vec<ChoiceSpec>, InteractionError> {
+            if !draft.contains_key("moved") {
+                return Ok(vec![ChoiceSpec::position(Position::new(1, 0))]);
+            }
+            if !draft.contains_key("ability") {
+                return Ok(vec![
+                    ChoiceSpec::ability(self.ability).with_label("Fireball"),
+                    ChoiceSpec::finish_turn(),
+                ]);
+            }
+            if !draft.contains_key("target") {
+                return Ok(vec![ChoiceSpec::entity(self.target)]);
+            }
+            if !draft.contains_key("mode") {
+                return Ok(vec![ChoiceSpec::option("normal")]);
+            }
+
+            assert_eq!(turn.working.entity(self.actor)?.position, Position::new(1, 0));
+            Ok(vec![ChoiceSpec::finish_turn()])
+        }
+
+        fn apply_choice(
+            &self,
+            turn: &mut TurnSession,
+            draft: &mut StateMap,
+            choice: &Choice,
+        ) -> Result<InteractionFlow, InteractionError> {
+            match &choice.kind {
+                ChoiceKind::SelectPosition { position } => {
+                    let actor = self.actor;
+                    turn.apply_step(recorded_step("move"), |state| {
+                        state.move_entity(actor, *position)
+                    })?;
+                    draft.insert("moved", true);
+                    Ok(InteractionFlow::Continue)
+                }
+                ChoiceKind::SelectAbility { ability } if *ability == self.ability => {
+                    draft.insert("ability", u64::from(ability.get()));
+                    Ok(InteractionFlow::Continue)
+                }
+                ChoiceKind::SelectEntity { entity } if *entity == self.target => {
+                    draft.insert("target", u64::from(entity.get()));
+                    Ok(InteractionFlow::Continue)
+                }
+                ChoiceKind::SelectOption { key } if key == "normal" => {
+                    draft.insert("mode", key.as_str());
+                    let target = self.target;
+                    turn.apply_step(recorded_step("fireball"), |state| {
+                        state.entity_mut(target)?.state.insert("hit", true);
+                        Ok(())
+                    })?;
+                    Ok(InteractionFlow::Continue)
+                }
+                ChoiceKind::FinishTurn => Ok(InteractionFlow::FinishTurn),
+                _ => Err(InteractionError::RuleViolation("unexpected choice".into())),
+            }
+        }
+    }
+
+    #[test]
+    fn forced_continuation_requeries_from_the_updated_working_state() {
+        let mut state = sample_state();
+        let entity = EntityId::new(20);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(1),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+        let turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+        let mut driver = InteractionDriver::new(ForcedChainRules { entity }, turn).unwrap();
+
+        let first = driver.interaction().choices[0].clone();
+        assert!(matches!(&first.kind, ChoiceKind::SelectPosition { position } if *position == Position::new(1, 0)));
+        driver.choose(first.id).unwrap();
+
+        let second = driver.interaction().choices[0].clone();
+        assert!(matches!(&second.kind, ChoiceKind::SelectPosition { position } if *position == Position::new(2, 0)));
+        assert!(!driver
+            .interaction()
+            .choices
+            .iter()
+            .any(|choice| matches!(&choice.kind, ChoiceKind::FinishTurn)));
+        driver.choose(second.id).unwrap();
+
+        assert_eq!(driver.turn().steps.len(), 2);
+        assert!(matches!(&driver.interaction().choices[0].kind, ChoiceKind::FinishTurn));
+        let finish = driver.interaction().choices[0].id;
+        assert_eq!(driver.choose(finish).unwrap(), InteractionUpdate::Finished);
+        assert!(driver.is_finished());
+    }
+
+    #[test]
+    fn interaction_supports_move_then_ability_then_target_and_option() {
+        let mut state = sample_state();
+        let actor = EntityId::new(20);
+        let target = EntityId::new(21);
+        state
+            .add_entity(EntityState::new(
+                actor,
+                EntityTypeId::new(1),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+        state
+            .add_entity(EntityState::new(
+                target,
+                EntityTypeId::new(2),
+                PlayerId::new(2),
+                Position::new(3, 0),
+            ))
+            .unwrap();
+        let turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+        let ability = AbilityId::new(9);
+        let mut driver = InteractionDriver::new(
+            AbilityFlowRules {
+                actor,
+                target,
+                ability,
+            },
+            turn,
+        )
+        .unwrap();
+
+        // A simple move is offered directly; there is no pointless ability menu first.
+        let move_choice = driver.interaction().choices[0].clone();
+        assert!(matches!(&move_choice.kind, ChoiceKind::SelectPosition { .. }));
+        driver.choose(move_choice.id).unwrap();
+
+        let ability_choice = driver
+            .interaction()
+            .choices
+            .iter()
+            .find(|choice| matches!(&choice.kind, ChoiceKind::SelectAbility { .. }))
+            .unwrap()
+            .clone();
+        driver.choose(ability_choice.id).unwrap();
+
+        let target_choice = driver.interaction().choices[0].clone();
+        assert!(matches!(&target_choice.kind, ChoiceKind::SelectEntity { entity } if *entity == target));
+        driver.choose(target_choice.id).unwrap();
+
+        let option_choice = driver.interaction().choices[0].clone();
+        assert!(matches!(&option_choice.kind, ChoiceKind::SelectOption { key } if key == "normal"));
+        driver.choose(option_choice.id).unwrap();
+
+        assert_eq!(driver.turn().steps.len(), 2);
+        assert_eq!(
+            driver
+                .turn()
+                .working
+                .entity(target)
+                .unwrap()
+                .state
+                .get("hit")
+                .and_then(StateValue::as_bool),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn stale_choice_ids_are_rejected_after_interaction_refresh() {
+        let mut state = sample_state();
+        let entity = EntityId::new(20);
+        state
+            .add_entity(EntityState::new(
+                entity,
+                EntityTypeId::new(1),
+                PlayerId::new(1),
+                Position::new(0, 0),
+            ))
+            .unwrap();
+        let turn = TurnSession::new(&state, PlayerId::new(1)).unwrap();
+        let mut driver = InteractionDriver::new(ForcedChainRules { entity }, turn).unwrap();
+
+        let stale = driver.interaction().choices[0].id;
+        driver.choose(stale).unwrap();
+        assert_eq!(
+            driver.choose(stale),
+            Err(InteractionError::StaleOrInvalidChoice(stale))
+        );
+    }
+
 }

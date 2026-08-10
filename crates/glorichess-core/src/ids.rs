@@ -44,4 +44,37 @@ id_type!(TeamId);
 id_type!(EntityId);
 id_type!(EntityTypeId);
 id_type!(AbilityId);
-id_type!(ChoiceId);
+
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(transparent)]
+pub struct ChoiceId(pub u64);
+
+impl ChoiceId {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+impl fmt::Display for ChoiceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<u64> for ChoiceId {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<ChoiceId> for u64 {
+    fn from(value: ChoiceId) -> Self {
+        value.0
+    }
+}

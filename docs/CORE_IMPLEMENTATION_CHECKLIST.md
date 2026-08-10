@@ -78,18 +78,18 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 
 ## Phase 3 — Generic interaction protocol
 
-- [ ] Define generic interaction/choice data model.
-- [ ] Support selecting an entity.
-- [ ] Support selecting a board position.
-- [ ] Support selecting an ability.
-- [ ] Support selecting a generic option.
-- [ ] Support explicit `FinishTurn` when a ruleset needs it.
-- [ ] Assign opaque stable-enough `ChoiceId`s for a current interaction state.
-- [ ] Reject stale/invalid choice IDs safely.
-- [ ] Allow a simple move to skip an unnecessary ability menu.
-- [ ] Re-query choices after every committed step in a turn session.
-- [ ] Add test-only multi-step interaction flow.
-- [ ] Add test-only forced-continuation flow.
+- [x] Define generic interaction/choice data model.
+- [x] Support selecting an entity.
+- [x] Support selecting a board position.
+- [x] Support selecting an ability.
+- [x] Support selecting a generic option.
+- [x] Support explicit `FinishTurn` when a ruleset needs it.
+- [x] Assign opaque stable-enough `ChoiceId`s for a current interaction state.
+- [x] Reject stale/invalid choice IDs safely.
+- [x] Allow a simple move to skip an unnecessary ability menu.
+- [x] Re-query choices after every committed step in a turn session.
+- [x] Add test-only multi-step interaction flow.
+- [x] Add test-only forced-continuation flow.
 
 ## Phase 4 — Transactional mutation and change tracing
 
