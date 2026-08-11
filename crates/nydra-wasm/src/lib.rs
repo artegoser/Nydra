@@ -6,12 +6,13 @@ use nydra_checkers::{
     BLACK as CHECKERS_BLACK, WHITE as CHECKERS_WHITE,
 };
 use nydra_chess::{
-    standard_chess_state, ChessInteractionRules, ChessOutcome, ChessRules, ChessSide, STANDARD_FEN,
+    standard_chess_state, ChessDrawClaim, ChessInteractionRules, ChessOutcome, ChessRules, ChessSide,
+    STANDARD_FEN,
 };
 use nydra_core::{
     Choice, ChoiceId, ChoiceKind, EntityState, GameOutcome, GameState, GameTimeline, InteractionDriver,
     InteractionRules, InteractionUpdate, PlayerState, Position, PresentationCue, RuleContext, StateChange,
-    StateDelta, StateMap, StepRecord, TeamState, TurnState,
+    RecordedAction, StateDelta, StateMap, StepRecord, TeamState, TurnState,
 };
 use nydra_go::{
     empty_state as empty_go_state, registry as go_registry, GoInteractionRules, BLACK as GO_BLACK,
@@ -21,6 +22,7 @@ use nydra_rift::{
     registry as rift_registry, standard_state as standard_rift_state, RiftInteractionRules,
 };
 use serde::Serialize;
+use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -70,6 +72,7 @@ struct ChessRuntime {
     interaction: Option<InteractionDriver<ChessInteractionRules>>,
     undo_floor: usize,
     initial_fen: String,
+    pgn_tags: BTreeMap<String, String>,
 }
 
 struct CheckersRuntime {
@@ -238,8 +241,54 @@ impl GameHandle {
         };
         runtime
             .rules
-            .to_pgn(&runtime.initial_fen, runtime.timeline.history())
+            .to_pgn_with_tags(&runtime.initial_fen, runtime.timeline.history(), &runtime.pgn_tags)
             .map_err(js_error)
+    }
+
+    #[wasm_bindgen(js_name = chessDrawClaims)]
+    pub fn chess_draw_claims(&self) -> Result<JsValue, JsValue> {
+        let Runtime::Chess(runtime) = &self.inner else {
+            return Err(js_error("draw claims are only available for the chess ruleset"));
+        };
+        to_js(&runtime.draw_claims_view().map_err(js_error)?)
+    }
+
+    #[wasm_bindgen(js_name = chessResign)]
+    pub fn chess_resign(&mut self) -> Result<JsValue, JsValue> {
+        let steps = match &mut self.inner {
+            Runtime::Chess(runtime) => runtime.resign().map_err(js_error)?,
+            _ => return Err(js_error("resignation is only available for the chess ruleset")),
+        };
+        to_js(&self.transition_view(true, &steps).map_err(js_error)?)
+    }
+
+    #[wasm_bindgen(js_name = chessAgreeDraw)]
+    pub fn chess_agree_draw(&mut self) -> Result<JsValue, JsValue> {
+        let steps = match &mut self.inner {
+            Runtime::Chess(runtime) => runtime.agree_draw().map_err(js_error)?,
+            _ => return Err(js_error("draw agreement is only available for the chess ruleset")),
+        };
+        to_js(&self.transition_view(true, &steps).map_err(js_error)?)
+    }
+
+    #[wasm_bindgen(js_name = chessClaimDraw)]
+    pub fn chess_claim_draw(&mut self, kind: &str) -> Result<JsValue, JsValue> {
+        let claim = parse_chess_draw_claim(kind).map_err(js_error)?;
+        let steps = match &mut self.inner {
+            Runtime::Chess(runtime) => runtime.claim_draw(claim).map_err(js_error)?,
+            _ => return Err(js_error("draw claims are only available for the chess ruleset")),
+        };
+        to_js(&self.transition_view(true, &steps).map_err(js_error)?)
+    }
+
+    #[wasm_bindgen(js_name = chessClaimDrawAfterSan)]
+    pub fn chess_claim_draw_after_san(&mut self, kind: &str, san: &str) -> Result<JsValue, JsValue> {
+        let claim = parse_chess_draw_claim(kind).map_err(js_error)?;
+        let steps = match &mut self.inner {
+            Runtime::Chess(runtime) => runtime.claim_draw_after_san(claim, san).map_err(js_error)?,
+            _ => return Err(js_error("draw claims are only available for the chess ruleset")),
+        };
+        to_js(&self.transition_view(true, &steps).map_err(js_error)?)
     }
 
     pub fn history(&self) -> Result<JsValue, JsValue> {
@@ -279,6 +328,7 @@ impl ChessRuntime {
             interaction: None,
             undo_floor: 0,
             initial_fen: STANDARD_FEN.to_owned(),
+            pgn_tags: BTreeMap::new(),
         };
         runtime.rebuild_interaction()?;
         Ok(runtime)
@@ -296,6 +346,7 @@ impl ChessRuntime {
             interaction: None,
             undo_floor: imported.synthetic_history_len,
             initial_fen,
+            pgn_tags: BTreeMap::new(),
         };
         runtime.rebuild_interaction()?;
         Ok(runtime)
@@ -317,6 +368,7 @@ impl ChessRuntime {
             interaction: None,
             undo_floor,
             initial_fen: imported.initial_fen,
+            pgn_tags: imported.tags,
         };
         runtime.rebuild_interaction()?;
         Ok(runtime)
@@ -355,6 +407,156 @@ impl ChessRuntime {
         self.rebuild_interaction()
     }
 
+    fn resign(&mut self) -> Result<Vec<StepRecord>, String> {
+        let actor = active_actor(self.timeline.current(), "chess")?;
+        let history = self.timeline.history().clone();
+        let rules = &self.rules;
+        let mut turn = self.timeline.begin_turn(actor).map_err(string_error)?;
+        turn.apply_transaction(
+            RecordedAction::new("chess_resign"),
+            |transaction| -> Result<(), nydra_chess::ChessError> {
+                rules.resign(transaction.raw_state_mut(), &history, actor)?;
+                Ok(())
+            },
+        )
+        .map_err(string_error)?;
+        let steps = turn.steps.clone();
+        self.timeline.commit_turn(turn).map_err(string_error)?;
+        self.rebuild_interaction()?;
+        Ok(steps)
+    }
+
+    fn agree_draw(&mut self) -> Result<Vec<StepRecord>, String> {
+        let actor = active_actor(self.timeline.current(), "chess")?;
+        let history = self.timeline.history().clone();
+        let rules = &self.rules;
+        let mut turn = self.timeline.begin_turn(actor).map_err(string_error)?;
+        turn.apply_transaction(
+            RecordedAction::new("chess_draw_agreement"),
+            |transaction| -> Result<(), nydra_chess::ChessError> {
+                rules.agree_draw(transaction.raw_state_mut(), &history)?;
+                Ok(())
+            },
+        )
+        .map_err(string_error)?;
+        let steps = turn.steps.clone();
+        self.timeline.commit_turn(turn).map_err(string_error)?;
+        self.rebuild_interaction()?;
+        Ok(steps)
+    }
+
+    fn claim_draw(&mut self, claim: ChessDrawClaim) -> Result<Vec<StepRecord>, String> {
+        let actor = active_actor(self.timeline.current(), "chess")?;
+        let history = self.timeline.history().clone();
+        let rules = &self.rules;
+        let action_kind = match claim {
+            ChessDrawClaim::ThreefoldRepetition => "chess_draw_claim_threefold",
+            ChessDrawClaim::FiftyMoveRule => "chess_draw_claim_fifty_move",
+        };
+        let mut turn = self.timeline.begin_turn(actor).map_err(string_error)?;
+        turn.apply_transaction(
+            RecordedAction::new(action_kind),
+            |transaction| -> Result<(), nydra_chess::ChessError> {
+                rules.claim_draw(transaction.raw_state_mut(), &history, claim)?;
+                Ok(())
+            },
+        )
+        .map_err(string_error)?;
+        let steps = turn.steps.clone();
+        self.timeline.commit_turn(turn).map_err(string_error)?;
+        self.rebuild_interaction()?;
+        Ok(steps)
+    }
+
+    fn claim_draw_after_san(
+        &mut self,
+        claim: ChessDrawClaim,
+        san: &str,
+    ) -> Result<Vec<StepRecord>, String> {
+        let state = self.timeline.current().clone();
+        let history = self.timeline.history().clone();
+        let (movement, promotion) = self.rules.resolve_san(&state, &history, san).map_err(string_error)?;
+        let actor = active_actor(&state, "chess")?;
+        let rules = &self.rules;
+        let action_kind = match claim {
+            ChessDrawClaim::ThreefoldRepetition => "chess_draw_claim_threefold_by_move",
+            ChessDrawClaim::FiftyMoveRule => "chess_draw_claim_fifty_move_by_move",
+        };
+        let mut action = RecordedAction::new(action_kind);
+        action.data.insert("san", san.to_owned());
+        let mut turn = self.timeline.begin_turn(actor).map_err(string_error)?;
+        turn.apply_transaction(
+            action,
+            |transaction| -> Result<(), nydra_chess::ChessError> {
+                rules.claim_draw_after_move(
+                    transaction.raw_state_mut(),
+                    &history,
+                    claim,
+                    movement,
+                    promotion,
+                )?;
+                Ok(())
+            },
+        )
+        .map_err(string_error)?;
+        let steps = turn.steps.clone();
+        self.timeline.commit_turn(turn).map_err(string_error)?;
+        self.rebuild_interaction()?;
+        Ok(steps)
+    }
+
+    fn draw_claims_view(&self) -> Result<ChessDrawClaimsView, String> {
+        let state = self.timeline.current();
+        let history = self.timeline.history();
+        let status = self.rules.status(state, history).map_err(string_error)?;
+        let mut by_move = Vec::new();
+        if status.outcome.is_some() {
+            return Ok(ChessDrawClaimsView {
+                can_agree_draw: false,
+                current_threefold_repetition: false,
+                current_fifty_move_rule: false,
+                by_move,
+            });
+        }
+        let candidates = [
+            (
+                "threefold_repetition",
+                ChessDrawClaim::ThreefoldRepetition,
+                history.len() >= 7 && !status.can_claim_threefold_repetition,
+            ),
+            (
+                "fifty_move_rule",
+                ChessDrawClaim::FiftyMoveRule,
+                status.halfmove_clock == 99 && !status.can_claim_fifty_move_rule,
+            ),
+        ];
+        for (kind, claim, should_scan) in candidates {
+            if !should_scan {
+                continue;
+            }
+            for (movement, promotion) in self
+                .rules
+                .claimable_draw_moves(state, history, claim)
+                .map_err(string_error)?
+            {
+                let san = self
+                    .rules
+                    .san_for_move(state, history, movement, promotion)
+                    .map_err(string_error)?;
+                by_move.push(ChessDrawClaimMoveView {
+                    kind: kind.to_owned(),
+                    san,
+                });
+            }
+        }
+        Ok(ChessDrawClaimsView {
+            can_agree_draw: status.can_agree_draw,
+            current_threefold_repetition: status.can_claim_threefold_repetition,
+            current_fifty_move_rule: status.can_claim_fifty_move_rule,
+            by_move,
+        })
+    }
+
     fn game_view(&self) -> Result<GameView, String> {
         let state = visible_state(&self.timeline, self.interaction.as_ref());
         let mut entities = Vec::with_capacity(state.entities.len());
@@ -370,16 +572,25 @@ impl ChessRuntime {
         let mut details = StateMap::new();
         details.insert("repetition_count", status.repetition_count as u64);
         details.insert("halfmove_clock", u64::from(status.halfmove_clock));
+        details.insert("can_agree_draw", status.can_agree_draw);
         details.insert("can_claim_threefold_repetition", status.can_claim_threefold_repetition);
         details.insert("can_claim_fifty_move_rule", status.can_claim_fifty_move_rule);
+        let status_text = match status.outcome.as_ref() {
+            Some(chess_outcome) => chess_outcome_text(chess_outcome),
+            None => format!(
+                "{} to move{}",
+                side_name(status.side_to_move),
+                if status.in_check { " · check" } else { "" }
+            ),
+        };
         Ok(GameView::new(
             "chess", "Chess", "checkerboard", state, entities,
-            if status.outcome.is_some() { outcome.as_ref().map(outcome_text).unwrap_or_default() } else { format!("{} to move{}", side_name(status.side_to_move), if status.in_check { " · check" } else { "" }) },
+            status_text,
             outcome,
             checked,
             details,
             self.can_undo(), self.timeline.can_redo(),
-            last_action_view(self.timeline.history()),
+            last_chess_action_view(self.timeline.history()),
         ))
     }
 
@@ -403,13 +614,40 @@ impl ChessRuntime {
                 continue;
             }
             let side = ChessSide::from_player(turn.actor).ok_or_else(|| "history actor is not a chess side".to_owned())?;
-            let san = self.rules.san_for_turn(turn, &prefix).map_err(string_error)?;
+            let notation = match turn.steps.last().map(|step| step.action.kind.as_str()) {
+                Some("chess_move") => self.rules.san_for_turn(turn, &prefix).map_err(string_error)?,
+                Some("chess_resign") => "Resignation".to_owned(),
+                Some("chess_draw_agreement") => "Draw agreement".to_owned(),
+                Some("chess_draw_claim_threefold") => "Threefold repetition claimed".to_owned(),
+                Some("chess_draw_claim_fifty_move") => "Fifty-move draw claimed".to_owned(),
+                Some("chess_draw_claim_threefold_by_move") => {
+                    let san = turn
+                        .steps
+                        .last()
+                        .and_then(|step| step.action.data.get("san"))
+                        .and_then(nydra_core::StateValue::as_str)
+                        .unwrap_or("?");
+                    format!("Threefold repetition claimed by intended move {san}")
+                }
+                Some("chess_draw_claim_fifty_move_by_move") => {
+                    let san = turn
+                        .steps
+                        .last()
+                        .and_then(|step| step.action.data.get("san"))
+                        .and_then(nydra_core::StateValue::as_str)
+                        .unwrap_or("?");
+                    format!("Fifty-move draw claimed by intended move {san}")
+                }
+                Some("chess_recorded_result") => "Recorded PGN result".to_owned(),
+                Some(other) => other.to_owned(),
+                None => "Terminal action".to_owned(),
+            };
             turns.push(HistoryTurnView {
                 index: u32::try_from(index).unwrap_or(u32::MAX),
                 actor: turn.actor.get(),
                 turn_number: self.rules.fullmove_number(&turn.before),
                 actor_label: side_name(side).to_owned(),
-                notation: san,
+                notation,
                 actions: action_views(turn),
             });
             prefix = prefix.with_appended(turn.clone()).map_err(string_error)?;
@@ -589,11 +827,34 @@ fn interaction_view(generation: u64, selected: Option<nydra_core::EntityId>, pen
 
 fn last_action_view(history: &nydra_core::History) -> Option<MoveEndpointsView> {
     let turn = history.turns().iter().rev().find(|turn| !turn.synthetic)?;
+    movement_endpoints(turn)
+}
+
+fn last_chess_action_view(history: &nydra_core::History) -> Option<MoveEndpointsView> {
+    history
+        .turns()
+        .iter()
+        .rev()
+        .filter(|turn| !turn.synthetic)
+        .find_map(movement_endpoints)
+}
+
+fn movement_endpoints(turn: &nydra_core::TurnRecord) -> Option<MoveEndpointsView> {
     for step in turn.steps.iter().rev() {
         for change in step.delta.changes.iter().rev() {
             match change {
-                StateChange::EntityMoved { from, to, .. } => return Some(MoveEndpointsView { from: (*from).into(), to: (*to).into() }),
-                StateChange::EntityAdded { entity } => return Some(MoveEndpointsView { from: entity.position.into(), to: entity.position.into() }),
+                StateChange::EntityMoved { from, to, .. } => {
+                    return Some(MoveEndpointsView {
+                        from: (*from).into(),
+                        to: (*to).into(),
+                    });
+                }
+                StateChange::EntityAdded { entity } => {
+                    return Some(MoveEndpointsView {
+                        from: entity.position.into(),
+                        to: entity.position.into(),
+                    });
+                }
                 _ => {}
             }
         }
@@ -623,10 +884,32 @@ fn chess_outcome_to_generic(outcome: &ChessOutcome) -> GameOutcome {
         ChessOutcome::FiftyMoveRule => GameOutcome::new("chess.fifty_move_rule"),
         ChessOutcome::SeventyFiveMoveRule => GameOutcome::new("chess.seventy_five_move_rule"),
         ChessOutcome::DeadPosition => GameOutcome::new("chess.dead_position"),
+        ChessOutcome::RecordedWin { winner, loser } => GameOutcome::new("chess.recorded_win").with_winner(*winner).with_loser(*loser),
+        ChessOutcome::RecordedDraw => GameOutcome::new("chess.recorded_draw"),
     }
 }
 
 fn side_name(side: ChessSide) -> &'static str { match side { ChessSide::White => "white", ChessSide::Black => "black" } }
+
+fn chess_player_name(player: nydra_core::PlayerId) -> &'static str {
+    if player == nydra_chess::WHITE_PLAYER { "White" } else if player == nydra_chess::BLACK_PLAYER { "Black" } else { "Unknown" }
+}
+
+fn chess_outcome_text(outcome: &ChessOutcome) -> String {
+    match outcome {
+        ChessOutcome::Checkmate { winner, .. } => format!("Checkmate · {} wins", chess_player_name(*winner)),
+        ChessOutcome::Stalemate => "Draw · stalemate".to_owned(),
+        ChessOutcome::Resignation { winner, .. } => format!("{} wins · resignation", chess_player_name(*winner)),
+        ChessOutcome::DrawAgreement => "Draw · agreement".to_owned(),
+        ChessOutcome::ThreefoldRepetition => "Draw · threefold repetition".to_owned(),
+        ChessOutcome::FivefoldRepetition => "Draw · fivefold repetition".to_owned(),
+        ChessOutcome::FiftyMoveRule => "Draw · 50-move rule".to_owned(),
+        ChessOutcome::SeventyFiveMoveRule => "Draw · 75-move rule".to_owned(),
+        ChessOutcome::DeadPosition => "Draw · dead position".to_owned(),
+        ChessOutcome::RecordedWin { winner, .. } => format!("{} wins · recorded result", chess_player_name(*winner)),
+        ChessOutcome::RecordedDraw => "Draw · recorded result".to_owned(),
+    }
+}
 
 fn outcome_text(outcome: &GameOutcome) -> String {
     outcome
@@ -635,6 +918,28 @@ fn outcome_text(outcome: &GameOutcome) -> String {
         .map(|(_, key)| key)
         .unwrap_or(&outcome.key)
         .replace('_', " ")
+}
+
+fn parse_chess_draw_claim(value: &str) -> Result<ChessDrawClaim, String> {
+    match value {
+        "threefold_repetition" => Ok(ChessDrawClaim::ThreefoldRepetition),
+        "fifty_move_rule" => Ok(ChessDrawClaim::FiftyMoveRule),
+        other => Err(format!("unknown chess draw claim '{other}'")),
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ChessDrawClaimMoveView {
+    pub kind: String,
+    pub san: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ChessDrawClaimsView {
+    pub can_agree_draw: bool,
+    pub current_threefold_repetition: bool,
+    pub current_fifty_move_rule: bool,
+    pub by_move: Vec<ChessDrawClaimMoveView>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -779,4 +1084,36 @@ mod tests {
         assert_eq!(runtime.timeline.history().turns().iter().filter(|turn| !turn.synthetic).count(), 4);
         assert_eq!(runtime.initial_fen, STANDARD_FEN);
     }
+    #[test]
+    fn chess_terminal_actions_are_authoritative_and_undoable() {
+        let mut runtime = ChessRuntime::standard().unwrap();
+        runtime.resign().unwrap();
+        assert!(runtime.interaction.is_none());
+        assert!(matches!(
+            runtime.rules.status(runtime.timeline.current(), runtime.timeline.history()).unwrap().outcome,
+            Some(ChessOutcome::Resignation { .. })
+        ));
+        runtime.undo().unwrap();
+        assert!(runtime.interaction.is_some());
+        assert!(runtime.rules.status(runtime.timeline.current(), runtime.timeline.history()).unwrap().outcome.is_none());
+    }
+
+    #[test]
+    fn pgn_declared_result_stops_runtime_without_inventing_a_move() {
+        let runtime = ChessRuntime::from_pgn(
+            "[Event \"Resigned game\"]\n[Result \"0-1\"]\n\n1. e4 e5 2. Nf3 Nc6 0-1",
+        )
+        .unwrap();
+        assert!(runtime.interaction.is_none());
+        assert_eq!(runtime.pgn_tags.get("Event").map(String::as_str), Some("Resigned game"));
+        assert!(matches!(
+            runtime.rules.status(runtime.timeline.current(), runtime.timeline.history()).unwrap().outcome,
+            Some(ChessOutcome::RecordedWin { winner, .. }) if winner == nydra_chess::BLACK_PLAYER
+        ));
+        assert_eq!(
+            runtime.timeline.history().turns().iter().filter(|turn| !turn.synthetic).count(),
+            5
+        );
+    }
+
 }

@@ -5,6 +5,7 @@
 	import {
 		LocalGame,
 		stateScalar,
+		type ChessDrawClaimsView,
 		type ChoiceView,
 		type GameView,
 		type HistoryTurnView,
@@ -32,6 +33,7 @@
 	let fenDraft = '';
 	let currentPgn = '';
 	let pgnDraft = '';
+	let chessDrawClaims: ChessDrawClaimsView | null = null;
 	let orientation: 'white' | 'black' = 'white';
 	let error: string | null = null;
 	let loading = true;
@@ -60,9 +62,11 @@
 		if (game.ruleset === 'chess') {
 			currentFen = runtime.fen();
 			currentPgn = runtime.pgn();
+			chessDrawClaims = runtime.chessDrawClaims();
 			if (resetDrafts || !fenDraft) fenDraft = currentFen;
 			if (resetDrafts || !pgnDraft) pgnDraft = currentPgn;
 		} else {
+			chessDrawClaims = null;
 			currentFen = '';
 			currentPgn = '';
 			fenDraft = '';
@@ -76,7 +80,9 @@
 		interaction = transition.interaction;
 		latestTransition = transition;
 		if (animate && transition.changes.length > 0) animationSeq += 1;
-		syncMetadata();
+		// FEN, PGN, history and draw claims describe only committed state.
+		// Selection/promotion drafts must not trigger expensive prospective-claim scans.
+		if (transition.committed) syncMetadata();
 	}
 
 	function run(action: () => TransitionView, animate = true) {
@@ -106,6 +112,29 @@
 	function redo() {
 		if (!runtime || !game?.can_redo) return;
 		run(() => runtime!.redo());
+	}
+
+	function chessResign() {
+		if (!runtime || game?.ruleset !== 'chess' || game.status.outcome) return;
+		run(() => runtime!.chessResign(), false);
+	}
+
+	function chessAgreeDraw() {
+		if (!runtime || game?.ruleset !== 'chess' || game.status.outcome) return;
+		run(() => runtime!.chessAgreeDraw(), false);
+	}
+
+	function chessClaimDraw(kind: 'threefold_repetition' | 'fifty_move_rule') {
+		if (!runtime || game?.ruleset !== 'chess' || game.status.outcome) return;
+		run(() => runtime!.chessClaimDraw(kind), false);
+	}
+
+	function chessClaimDrawAfterSan(
+		kind: 'threefold_repetition' | 'fifty_move_rule',
+		san: string
+	) {
+		if (!runtime || game?.ruleset !== 'chess' || game.status.outcome) return;
+		run(() => runtime!.chessClaimDrawAfterSan(kind, san), false);
 	}
 
 	async function installRuntime(next: LocalGame) {
@@ -305,6 +334,36 @@
 			</section>
 
 			{#if game.ruleset === 'chess'}
+				<section>
+					<h2>Game actions</h2>
+					{#if game.status.outcome}
+						<p class="panel-muted">The game is finished. Undo the terminal action to continue locally.</p>
+					{:else}
+						<div class="action-bar" aria-label="Chess game actions">
+							<button type="button" on:click={chessResign}>Resign</button>
+							{#if chessDrawClaims?.can_agree_draw}
+								<button type="button" on:click={chessAgreeDraw}>Draw by agreement</button>
+							{/if}
+							{#if chessDrawClaims?.current_threefold_repetition}
+								<button type="button" on:click={() => chessClaimDraw('threefold_repetition')}>Claim threefold</button>
+							{/if}
+							{#if chessDrawClaims?.current_fifty_move_rule}
+								<button type="button" on:click={() => chessClaimDraw('fifty_move_rule')}>Claim 50-move draw</button>
+							{/if}
+						</div>
+						{#if chessDrawClaims && chessDrawClaims.by_move.length > 0}
+							<div class="unit-list">
+								{#each chessDrawClaims.by_move as claim}
+									<div class="unit-row">
+										<span>Claim {claim.kind === 'threefold_repetition' ? 'threefold' : '50-move'} by declaring <strong>{claim.san}</strong></span>
+										<button type="button" on:click={() => chessClaimDrawAfterSan(claim.kind, claim.san)}>Claim</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{/if}
+				</section>
+
 				<section>
 					<h2>Position</h2>
 					<div class="fen-current">

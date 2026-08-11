@@ -124,6 +124,18 @@ export interface TransitionView {
 	presentation: PresentationView[];
 }
 
+export interface ChessDrawClaimMoveView {
+	kind: 'threefold_repetition' | 'fifty_move_rule';
+	san: string;
+}
+
+export interface ChessDrawClaimsView {
+	can_agree_draw: boolean;
+	current_threefold_repetition: boolean;
+	current_fifty_move_rule: boolean;
+	by_move: ChessDrawClaimMoveView[];
+}
+
 export interface HistoryTurnView {
 	index: number;
 	actor: number;
@@ -143,6 +155,11 @@ interface WasmHandle {
 	redo(): TransitionView;
 	fen(): string;
 	pgn(): string;
+	chessDrawClaims(): ChessDrawClaimsView;
+	chessResign(): TransitionView;
+	chessAgreeDraw(): TransitionView;
+	chessClaimDraw(kind: string): TransitionView;
+	chessClaimDrawAfterSan(kind: string, san: string): TransitionView;
 	history(): HistoryTurnView[];
 	canUndo(): boolean;
 	canRedo(): boolean;
@@ -219,6 +236,26 @@ export class LocalGame {
 
 	pgn(): string {
 		return this.handle.pgn();
+	}
+
+	chessDrawClaims(): ChessDrawClaimsView {
+		return this.handle.chessDrawClaims();
+	}
+
+	chessResign(): TransitionView {
+		return this.handle.chessResign();
+	}
+
+	chessAgreeDraw(): TransitionView {
+		return this.handle.chessAgreeDraw();
+	}
+
+	chessClaimDraw(kind: ChessDrawClaimMoveView['kind']): TransitionView {
+		return this.handle.chessClaimDraw(kind);
+	}
+
+	chessClaimDrawAfterSan(kind: ChessDrawClaimMoveView['kind'], san: string): TransitionView {
+		return this.handle.chessClaimDrawAfterSan(kind, san);
 	}
 
 	history(): HistoryTurnView[] {
