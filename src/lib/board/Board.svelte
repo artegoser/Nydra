@@ -10,6 +10,7 @@
 		type GameView,
 		type HistoryTurnView,
 		type InteractionView,
+		type GoScoring,
 		type RulesetId,
 		type TransitionView
 	} from '$lib/wasm/runtime';
@@ -17,7 +18,7 @@
 	const rulesets: Array<{ id: RulesetId; label: string; description: string }> = [
 		{ id: 'chess', label: 'Chess', description: 'Standard chess with SAN, PGN and FEN.' },
 		{ id: 'checkers', label: 'Checkers', description: 'Mandatory captures, chains and kinging.' },
-		{ id: 'go', label: 'Go', description: '9×9 placement, capture, pass and simple ko.' },
+		{ id: 'go', label: 'Go', description: 'AGA rules with superko, scoring review, komi and handicap.' },
 		{ id: 'rift', label: 'Rift', description: 'Three players, teams, HP, mana and abilities.' }
 	];
 
@@ -35,6 +36,9 @@
 	let pgnDraft = '';
 	let chessDrawClaims: ChessDrawClaimsView | null = null;
 	let orientation: 'white' | 'black' = 'white';
+	let goSize = 19;
+	let goScoring: GoScoring = 'territory';
+	let goHandicap = 0;
 	let error: string | null = null;
 	let loading = true;
 
@@ -71,6 +75,13 @@
 			currentPgn = '';
 			fenDraft = '';
 			pgnDraft = '';
+		}
+		if (game.ruleset === 'go') {
+			goSize = game.width;
+			const scoring = stateScalar(game.status.details, 'scoring');
+			if (scoring === 'territory' || scoring === 'area') goScoring = scoring;
+			const handicap = stateScalar(game.status.details, 'handicap');
+			if (typeof handicap === 'number') goHandicap = handicap;
 		}
 	}
 
@@ -167,7 +178,26 @@
 	async function resetGame() {
 		try {
 			loading = true;
-			await installRuntime(await LocalGame.create(selectedRuleset));
+			const next =
+				selectedRuleset === 'go'
+					? await LocalGame.createGo(goSize, goScoring, goHandicap)
+					: await LocalGame.create(selectedRuleset);
+			await installRuntime(next);
+		} catch (cause) {
+			loading = false;
+			error = cause instanceof Error ? cause.message : String(cause);
+		}
+	}
+
+	function handleGoSizeChange() {
+		if (goSize !== 19 && goHandicap > 1) goHandicap = 0;
+	}
+
+	async function newGoGame() {
+		try {
+			loading = true;
+			if (goSize !== 19 && goHandicap > 1) goHandicap = 0;
+			await installRuntime(await LocalGame.createGo(goSize, goScoring, goHandicap));
 		} catch (cause) {
 			loading = false;
 			error = cause instanceof Error ? cause.message : String(cause);
@@ -212,6 +242,17 @@
 
 	function entityStat(entity: GameView['entities'][number], key: string) {
 		return stateScalar(entity.presentation_data, key);
+	}
+
+	function goDetail(key: string) {
+		return game?.ruleset === 'go' ? stateScalar(game.status.details, key) : null;
+	}
+
+	function halfPointText(value: string | number | boolean | null) {
+		if (typeof value !== 'number') return '—';
+		const sign = value < 0 ? '-' : '';
+		const absolute = Math.abs(value);
+		return absolute % 2 === 0 ? `${sign}${absolute / 2}` : `${sign}${Math.floor(absolute / 2)}.5`;
 	}
 
 	onMount(() => {
@@ -320,6 +361,57 @@
 				</section>
 			{/if}
 
+			{#if game.ruleset === 'go'}
+				<section>
+					<h2>AGA game</h2>
+					<div class="go-settings">
+						<label>
+							Board
+							<select bind:value={goSize} on:change={handleGoSizeChange}>
+								<option value={9}>9×9</option>
+								<option value={13}>13×13</option>
+								<option value={19}>19×19</option>
+							</select>
+						</label>
+						<label>
+							Counting
+							<select bind:value={goScoring}>
+								<option value="territory">Territory</option>
+								<option value="area">Area</option>
+							</select>
+						</label>
+						<label>
+							Handicap
+							<select bind:value={goHandicap}>
+								{#each { length: 10 } as _, handicap}
+									<option value={handicap} disabled={goSize !== 19 && handicap > 1}>{handicap === 0 ? 'Even' : handicap}</option>
+								{/each}
+							</select>
+						</label>
+						<button type="button" on:click={newGoGame} disabled={loading}>New game</button>
+					</div>
+					<div class="go-score-grid">
+						<span>Rules</span><strong>AGA</strong>
+						<span>Komi</span><strong>{halfPointText(goDetail('komi_half'))}</strong>
+						<span>Black prisoners</span><strong>{goDetail('black_prisoners') ?? 0}</strong>
+						<span>White prisoners</span><strong>{goDetail('white_prisoners') ?? 0}</strong>
+						<span>Black pass stones</span><strong>{goDetail('black_pass_stones') ?? 0}</strong>
+						<span>White pass stones</span><strong>{goDetail('white_pass_stones') ?? 0}</strong>
+					</div>
+					{#if goDetail('phase') === 'review'}
+						<p class="panel-muted">Click stone groups to mark their status, then choose Done reviewing. If the assessments differ, resume play resolves the dispute under AGA rules.</p>
+					{/if}
+					{#if game.status.outcome?.key === 'go.score'}
+						<div class="go-final-score">
+							<strong>Final score</strong>
+							<span>Black {halfPointText(goDetail('black_score_half'))}</span>
+							<span>White {halfPointText(goDetail('white_score_half'))}</span>
+							<span>Territory {goDetail('black_territory') ?? 0}–{goDetail('white_territory') ?? 0} · neutral {goDetail('neutral_points') ?? 0}</span>
+						</div>
+					{/if}
+				</section>
+			{/if}
+
 			<section class="history-panel">
 				<h2>History</h2>
 				{#if history.length === 0}
@@ -387,7 +479,7 @@
 						<button type="submit">Load PGN</button>
 					</form>
 				</section>
-			{:else}
+			{:else if game.ruleset !== 'go'}
 				<section>
 					<h2>Runtime proof</h2>
 					<p class="panel-muted">

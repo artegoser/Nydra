@@ -443,7 +443,12 @@
 
 <div
 	class="board-layer board-interaction"
+	class:go-board-interaction={game.board_style === 'go'}
+	class:go-black-to-play={game.board_style === 'go' && game.active_players[0] === 1}
+	class:go-white-to-play={game.board_style === 'go' && game.active_players[0] === 2}
 	bind:this={boardElement}
+	role="group"
+	aria-label={`${game.title} interaction surface`}
 	style="--width: {game.width}; --height: {game.height};"
 	on:pointermove={handlePointerMove}
 	on:pointerup={handlePointerUp}
@@ -511,6 +516,8 @@
 		{#each game.entities as entity (entity.id)}
 			{@const hp = stateScalar(entity.presentation_data, 'hp')}
 			{@const mana = stateScalar(entity.presentation_data, 'mana')}
+			{@const agreedDead = stateScalar(entity.presentation_data, 'agreed_dead') === true}
+			{@const disputedDead = stateScalar(entity.presentation_data, 'disputed_dead') === true}
 			{#if drag?.started && drag.entityId === entity.id}
 				<img class="piece-node origin-ghost" data-entity-id={entity.id} style={fadingStyle(entity, orientation, game.width, game.height)} src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)} alt="" draggable="false" />
 			{/if}
@@ -518,6 +525,8 @@
 				class="piece-node"
 				data-entity-id={entity.id}
 				class:dragging={drag?.started && drag.entityId === entity.id}
+				class:go-agreed-dead={agreedDead}
+				class:go-disputed-dead={disputedDead}
 				style={entityStyle(entity, drag, orientation, game.width, game.height, boardElement)}
 				src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)}
 				alt=""
