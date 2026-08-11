@@ -1,12 +1,14 @@
 # Nydra
 
-Nydra is a local-first programmable game runtime with a Svelte frontend. Its generic Rust core hosts composable entity, ability, game, interaction, history, and outcome rules; standard chess is the first concrete ruleset and compiles to WebAssembly for the browser.
+Nydra is a local-first programmable game runtime with a Svelte frontend. Its generic Rust core hosts composable entity, ability, game, interaction, history, and outcome rules; the built-in chess, checkers, Go, and Rift rulesets compile to WebAssembly for the browser.
 
 ## Repository layout
 
 - `crates/nydra-core` — generic state, history, turns, interaction, and runtime primitives.
 - `crates/nydra-chess` — standard chess rules built on the generic core.
-- `crates/nydra-examples` — internal checkers, Go, and Rift architecture proofs; not product modes.
+- `crates/nydra-checkers` — playable compact checkers ruleset.
+- `crates/nydra-go` — playable compact 9×9 Go ruleset.
+- `crates/nydra-rift` — playable synthetic tactical ruleset for abilities, teams and history mechanics.
 - `crates/nydra-wasm` — browser bindings for the Rust runtime.
 - `src` — SvelteKit presentation and input layer.
 - `docs/CORE_IMPLEMENTATION_PLAN.md` — architecture and implementation plan.
@@ -15,7 +17,7 @@ Nydra is a local-first programmable game runtime with a Svelte frontend. Its gen
 - `docs/GENERIC_ACTION_NOTATION.md` — ruleset-agnostic action recording and deterministic replay specification.
 - `docs/GENERIC_OUTCOME_RULES.md` — ruleset-wide terminal outcome contract and precedence rules.
 - `docs/GENERIC_GAME_RULES.md` — composition contract for entity-local and ruleset-wide mechanics.
-- `docs/EXAMPLE_RULESETS.md` — Phase 16 non-chess architecture proofs.
+- `docs/BUILTIN_RULESETS.md` — Phase 16 built-in reference rulesets.
 
 ## Requirements
 
@@ -38,7 +40,7 @@ Install frontend dependencies:
 pnpm install --frozen-lockfile
 ```
 
-Run the local Svelte application backed by the Rust/WASM chess runtime:
+Run the local Svelte application backed by the shared Rust/WASM runtime:
 
 ```bash
 pnpm dev
@@ -85,4 +87,4 @@ See:
 - [`docs/GENERIC_ACTION_NOTATION.md`](docs/GENERIC_ACTION_NOTATION.md)
 - [`docs/GENERIC_OUTCOME_RULES.md`](docs/GENERIC_OUTCOME_RULES.md)
 - [`docs/GENERIC_GAME_RULES.md`](docs/GENERIC_GAME_RULES.md)
-- [`docs/EXAMPLE_RULESETS.md`](docs/EXAMPLE_RULESETS.md)
+- [`docs/BUILTIN_RULESETS.md`](docs/BUILTIN_RULESETS.md)

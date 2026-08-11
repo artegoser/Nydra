@@ -13,7 +13,6 @@ The initial milestone explicitly does **not** include:
 - user-facing piece scripting or a DSL;
 - procedural magic;
 - fog of war;
-- checkers as a shipped game mode;
 - arbitrary graph topologies;
 - large-board performance work.
 
@@ -238,6 +237,12 @@ nydra/
 │   ├── nydra-core/
 │   │   └── src/
 │   ├── nydra-chess/
+│   │   └── src/
+│   ├── nydra-checkers/
+│   │   └── src/
+│   ├── nydra-go/
+│   │   └── src/
+│   ├── nydra-rift/
 │   │   └── src/
 │   └── nydra-wasm/
 │       └── src/
@@ -556,15 +561,21 @@ Expose a narrow browser-facing handle. A possible surface:
 
 ```text
 GameHandle
-  new_chess()
-  from_fen(fen)
+  new_game(ruleset_id)
   view()
   interaction()
-  choose(choice_id, input?)
+  choose(choice_id)
+  cancel_selection()
   undo()
   redo()
+  history()
+
+Chess-only compatibility/capability entry points:
+  new_chess()
+  from_fen(fen)
+  from_pgn(pgn)
   fen()
-  history_view()
+  pgn()
 ```
 
 The frontend receives serializable views rather than Rust internals.
@@ -802,13 +813,13 @@ Standard pawn promotion is the first production proof: `Pawn` owns the trigger, 
 
 ### Phase 16 — Architecture proof
 
-Implement the internal `nydra-examples` crate described in [`EXAMPLE_RULESETS.md`](./EXAMPLE_RULESETS.md). It contains compact, non-product checkers, Go, and Rift rulesets chosen to stress materially different runtime paths without adding mechanic-specific concepts to `nydra-core`.
+Implement the built-in proof rulesets described in [`BUILTIN_RULESETS.md`](./BUILTIN_RULESETS.md) as independent crates: `nydra-checkers`, `nydra-go`, and `nydra-rift`. Each mode must run through the same WASM `GameHandle`, interaction protocol, Svelte board renderer, transition animation path, history, and undo/redo pipeline as chess while adding no mechanic-specific concepts to `nydra-core`.
 
 - checkers proves mandatory capture, forced multi-capture continuation, piece-local promotion state, and multiple authoritative steps in one turn;
 - Go proves placement via entity spawning, group capture, pass, suicide rejection, and simple ko derived from committed history;
 - Rift proves arbitrary HP/mana state, explicit abilities, move + ability turns, target/option continuations, entity removal, history-derived rewind, three players/two teams, controller changes independent of owner, presentation cues, and team-level outcomes.
 
-These examples are verification fixtures, not shipped modes. Full rules coverage, frontend selection, notation, matchmaking, and production UX for these games remain out of scope.
+These are compact playable reference rulesets, not claims of tournament-complete implementations. Production matchmaking, exhaustive variant coverage, polished human notation, and mode-specific production UX remain out of scope. Their web UI exists to prove the complete runtime pipeline rather than only the Rust API surface.
 
 
 ### Phase 17 — Generic action notation and deterministic replay
@@ -832,7 +843,7 @@ The milestone is complete when:
 9. the frontend receives structural change traces for animation;
 10. the standard chess board matches the Lichess move interaction loop: click + drag, quiet dots + capture wedges, selected/last-move/check feedback, drag ghost/cancellation, rounded board clipping, and deterministic special-move animation;
 11. perft and special-rule regression suites pass;
-12. test-only custom rules prove that adding future non-chess entities/abilities does not require changing the generic core;
+12. the built-in checkers, Go, and Rift rulesets prove that adding non-chess entities/abilities does not require changing the generic core;
 13. a canonical generic action record can replay arbitrary accepted choice sequences through the same interaction runtime.
 14. terminal conditions can be supplied as generic ruleset-level outcome rules without modifying entity rules or core enums;
 15. intrinsic entity continuations and ruleset-wide modifiers compose through generic `ChoiceSpec`/`GameRuleSet` APIs without mechanic-specific interaction branches.

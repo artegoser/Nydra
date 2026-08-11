@@ -512,9 +512,9 @@ Reference: [`GENERIC_GAME_RULES.md`](./GENERIC_GAME_RULES.md).
 
 ## Phase 16 — Architecture proof
 
-Reference: [`EXAMPLE_RULESETS.md`](./EXAMPLE_RULESETS.md).
+Reference: [`BUILTIN_RULESETS.md`](./BUILTIN_RULESETS.md).
 
-- [x] Add internal `nydra-examples` without exposing new product modes in the web application.
+- [x] Split the Phase 16 proof modes into independent `nydra-checkers`, `nydra-go`, and `nydra-rift` crates.
 - [x] Register non-chess checker, Go stone, and Rift mage entity types without editing `nydra-core` enums.
 - [x] Give Rift entities custom HP/mana state.
 - [x] Expose explicit named Fireball, Rewind, and Hijack ability choices.
@@ -530,7 +530,13 @@ Reference: [`EXAMPLE_RULESETS.md`](./EXAMPLE_RULESETS.md).
 - [x] Prove a primary game action can be placement/spawn rather than movement through the Go example.
 - [x] Prove transactional group capture by removing multiple Go entities from one placement.
 - [x] Prove ruleset-level outcomes for checkers, Go, and the synthetic team mode.
-- [x] Confirm all examples use existing generic choices, transactions, state, history, teams, abilities, and outcomes with no mechanic-specific core enum variants.
+- [x] Confirm all reference rulesets use existing generic choices, transactions, state, history, teams, abilities, and outcomes with no mechanic-specific core enum variants.
+- [x] Expose all four built-in rulesets through one WASM `GameHandle` selected by ruleset ID.
+- [x] Add a Svelte ruleset selector and make chess, checkers, Go, and Rift playable through the shared board/interaction pipeline.
+- [x] Keep FEN/PGN as chess-only capabilities rather than leaking them into the generic runtime contract.
+- [x] Render ruleset-owned entity presentation assets and Rift HP/mana without frontend legality logic.
+- [x] Verify Go board-position choices work without selecting or moving an existing entity.
+- [x] Delete the temporary `nydra-examples` crate once the rulesets are independently runnable.
 
 ## Phase 17 — Generic action notation and deterministic replay
 
