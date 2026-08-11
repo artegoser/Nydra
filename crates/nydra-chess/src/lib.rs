@@ -992,7 +992,7 @@ mod tests {
         let history = History::default();
         let mut resignation = standard_chess_state().unwrap();
         assert_eq!(
-            rules.resign(&mut resignation, WHITE_PLAYER).unwrap(),
+            rules.resign(&mut resignation, &history, WHITE_PLAYER).unwrap(),
             ChessOutcome::Resignation {
                 winner: BLACK_PLAYER,
                 loser: WHITE_PLAYER,
@@ -1005,11 +1005,35 @@ mod tests {
                 loser: WHITE_PLAYER,
             })
         );
-
-        let mut agreement = standard_chess_state().unwrap();
-        assert_eq!(rules.agree_draw(&mut agreement), ChessOutcome::DrawAgreement);
         assert_eq!(
-            rules.status(&agreement, &history).unwrap().outcome,
+            rules.agree_draw(&mut resignation, &history),
+            Err(ChessError::GameFinished)
+        );
+
+        let initial = standard_chess_state().unwrap();
+        let mut too_early = initial.clone();
+        assert_eq!(
+            rules.agree_draw(&mut too_early, &history),
+            Err(ChessError::DrawAgreementUnavailable)
+        );
+
+        let white_pawn = initial.entity_at(Position::new(4, 1)).unwrap().unwrap().id;
+        let black_pawn = initial.entity_at(Position::new(4, 6)).unwrap().unwrap().id;
+        let mut timeline = nydra_core::GameTimeline::new(initial).unwrap();
+        commit_to(&mut timeline, &rules, white_pawn, Position::new(4, 3));
+        let mut after_white = timeline.current().clone();
+        assert_eq!(
+            rules.agree_draw(&mut after_white, timeline.history()),
+            Err(ChessError::DrawAgreementUnavailable)
+        );
+        commit_to(&mut timeline, &rules, black_pawn, Position::new(4, 4));
+        let mut agreement = timeline.current().clone();
+        assert_eq!(
+            rules.agree_draw(&mut agreement, timeline.history()).unwrap(),
+            ChessOutcome::DrawAgreement
+        );
+        assert_eq!(
+            rules.status(&agreement, timeline.history()).unwrap().outcome,
             Some(ChessOutcome::DrawAgreement)
         );
     }
@@ -1092,6 +1116,161 @@ mod tests {
         let status = rules.status(timeline.current(), timeline.history()).unwrap();
         assert_eq!(status.repetition_count, 5);
         assert_eq!(status.outcome, Some(ChessOutcome::FivefoldRepetition));
+    }
+
+    #[test]
+    fn terminal_metadata_does_not_create_an_extra_repetition_occurrence() {
+        use nydra_core::GameTimeline;
+
+        let rules = ChessRules::standard();
+        let state = standard_chess_state().unwrap();
+        let white_knight = state.entity_at(Position::new(6, 0)).unwrap().unwrap().id;
+        let black_knight = state.entity_at(Position::new(6, 7)).unwrap().unwrap().id;
+        let mut timeline = GameTimeline::new(state).unwrap();
+
+        commit_to(&mut timeline, &rules, white_knight, Position::new(5, 2));
+        commit_to(&mut timeline, &rules, black_knight, Position::new(5, 5));
+        commit_to(&mut timeline, &rules, white_knight, Position::new(6, 0));
+        commit_to(&mut timeline, &rules, black_knight, Position::new(6, 7));
+
+        let before = rules
+            .repetition_count(timeline.current(), timeline.history())
+            .unwrap();
+        assert_eq!(before, 2);
+
+        let mut terminal = timeline.current().clone();
+        rules
+            .record_result(&mut terminal, Some(WHITE_PLAYER))
+            .unwrap();
+        assert_eq!(
+            rules.repetition_count(&terminal, timeline.history()).unwrap(),
+            before
+        );
+    }
+
+    #[test]
+    fn terminal_only_history_does_not_duplicate_the_initial_repetition() {
+        use nydra_core::{GameTimeline, RecordedAction};
+
+        let rules = ChessRules::standard();
+        let mut timeline = GameTimeline::new(standard_chess_state().unwrap()).unwrap();
+        let actor = timeline.current().turn.active_players[0];
+        let mut turn = timeline.begin_turn(actor).unwrap();
+        turn.apply_transaction(
+            RecordedAction::new("chess_recorded_result"),
+            |transaction| -> Result<(), ChessError> {
+                rules.record_result(transaction.raw_state_mut(), Some(BLACK_PLAYER))?;
+                Ok(())
+            },
+        )
+        .unwrap();
+        timeline.commit_turn(turn).unwrap();
+
+        assert_eq!(
+            rules
+                .repetition_count(timeline.current(), timeline.history())
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn threefold_can_be_claimed_by_declaring_the_repeating_move() {
+        use nydra_core::GameTimeline;
+
+        let rules = ChessRules::standard();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let white_knight = add_piece(&mut state, 2, KNIGHT, ChessSide::White, Position::new(1, 0));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        let black_knight = add_piece(&mut state, 4, KNIGHT, ChessSide::Black, Position::new(1, 7));
+        let mut timeline = GameTimeline::new(state).unwrap();
+
+        commit_to(&mut timeline, &rules, white_knight, Position::new(2, 2));
+        commit_to(&mut timeline, &rules, black_knight, Position::new(2, 5));
+        commit_to(&mut timeline, &rules, white_knight, Position::new(1, 0));
+        commit_to(&mut timeline, &rules, black_knight, Position::new(1, 7));
+        commit_to(&mut timeline, &rules, white_knight, Position::new(2, 2));
+        commit_to(&mut timeline, &rules, black_knight, Position::new(2, 5));
+        commit_to(&mut timeline, &rules, white_knight, Position::new(1, 0));
+
+        let status = rules.status(timeline.current(), timeline.history()).unwrap();
+        assert_eq!(status.repetition_count, 2);
+        assert!(!status.can_claim_threefold_repetition);
+
+        let intended = rules
+            .legal_moves_with_history(timeline.current(), Some(timeline.history()), black_knight)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(1, 7))
+            .unwrap();
+        assert!(rules
+            .claimable_draw_moves(
+                timeline.current(),
+                timeline.history(),
+                ChessDrawClaim::ThreefoldRepetition,
+            )
+            .unwrap()
+            .iter()
+            .any(|(movement, promotion)| *movement == intended && promotion.is_none()));
+
+        let mut claimed = timeline.current().clone();
+        assert_eq!(
+            rules
+                .claim_draw_after_move(
+                    &mut claimed,
+                    timeline.history(),
+                    ChessDrawClaim::ThreefoldRepetition,
+                    intended,
+                    None,
+                )
+                .unwrap(),
+            ChessOutcome::ThreefoldRepetition
+        );
+        assert_eq!(claimed.entities, timeline.current().entities);
+    }
+
+    #[test]
+    fn fifty_move_rule_can_be_claimed_by_declaring_the_hundredth_halfmove() {
+        use nydra_core::History;
+
+        let rules = ChessRules::standard();
+        let history = History::default();
+        let mut state = empty_chess_state().unwrap();
+        add_piece(&mut state, 1, KING, ChessSide::White, Position::new(4, 0));
+        let knight = add_piece(&mut state, 2, KNIGHT, ChessSide::White, Position::new(1, 0));
+        add_piece(&mut state, 3, KING, ChessSide::Black, Position::new(4, 7));
+        add_piece(&mut state, 4, ROOK, ChessSide::Black, Position::new(7, 7));
+        rules.set_halfmove_clock(&mut state, 99);
+
+        let movement = rules
+            .legal_moves_with_history(&state, Some(&history), knight)
+            .unwrap()
+            .into_iter()
+            .find(|movement| movement.to == Position::new(2, 2))
+            .unwrap();
+        assert!(!rules.status(&state, &history).unwrap().can_claim_fifty_move_rule);
+        assert!(rules
+            .claimable_draw_moves(&state, &history, ChessDrawClaim::FiftyMoveRule)
+            .unwrap()
+            .iter()
+            .any(|(candidate, promotion)| *candidate == movement && promotion.is_none()));
+
+        let before = state.clone();
+        assert_eq!(
+            rules
+                .claim_draw_after_move(
+                    &mut state,
+                    &history,
+                    ChessDrawClaim::FiftyMoveRule,
+                    movement,
+                    None,
+                )
+                .unwrap(),
+            ChessOutcome::FiftyMoveRule
+        );
+        assert_eq!(state.entities, before.entities);
+        assert_eq!(rules.halfmove_clock(&state), 99);
     }
 
     #[test]

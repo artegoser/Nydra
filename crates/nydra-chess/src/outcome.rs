@@ -34,6 +34,8 @@ pub enum ChessOutcome {
     FiftyMoveRule,
     SeventyFiveMoveRule,
     DeadPosition,
+    RecordedWin { winner: PlayerId, loser: PlayerId },
+    RecordedDraw,
 }
 
 
@@ -76,6 +78,10 @@ impl ChessOutcome {
             ChessOutcome::FiftyMoveRule => GameOutcome::new("chess.fifty_move_rule"),
             ChessOutcome::SeventyFiveMoveRule => GameOutcome::new("chess.seventy_five_move_rule"),
             ChessOutcome::DeadPosition => GameOutcome::new("chess.dead_position"),
+            ChessOutcome::RecordedWin { winner, loser } => GameOutcome::new("chess.recorded_win")
+                .with_winner(*winner)
+                .with_loser(*loser),
+            ChessOutcome::RecordedDraw => GameOutcome::new("chess.recorded_draw"),
         }
     }
 }
@@ -87,6 +93,7 @@ pub struct ChessStatus {
     pub outcome: Option<ChessOutcome>,
     pub repetition_count: usize,
     pub halfmove_clock: u16,
+    pub can_agree_draw: bool,
     pub can_claim_threefold_repetition: bool,
     pub can_claim_fifty_move_rule: bool,
 }
@@ -156,6 +163,7 @@ impl ChessRules {
                 outcome: Some(outcome),
                 repetition_count,
                 halfmove_clock,
+                can_agree_draw: false,
                 can_claim_threefold_repetition: false,
                 can_claim_fifty_move_rule: false,
             });
@@ -184,6 +192,7 @@ impl ChessRules {
         Ok(ChessStatus {
             side_to_move: side,
             in_check,
+            can_agree_draw: outcome.is_none() && self.fullmove_number(state) > 1,
             can_claim_threefold_repetition: outcome.is_none() && repetition_count >= 3,
             can_claim_fifty_move_rule: outcome.is_none() && halfmove_clock >= 100,
             outcome,
@@ -192,7 +201,13 @@ impl ChessRules {
         })
     }
 
-    pub fn resign(&self, state: &mut GameState, player: PlayerId) -> Result<ChessOutcome, ChessError> {
+    pub fn resign(
+        &self,
+        state: &mut GameState,
+        history: &History,
+        player: PlayerId,
+    ) -> Result<ChessOutcome, ChessError> {
+        self.ensure_ongoing(state, history)?;
         let side = ChessSide::from_player(player).ok_or(ChessError::UnknownSide(player))?;
         let outcome = ChessOutcome::Resignation {
             winner: side.opponent().player(),
@@ -202,10 +217,18 @@ impl ChessRules {
         Ok(outcome)
     }
 
-    pub fn agree_draw(&self, state: &mut GameState) -> ChessOutcome {
+    pub fn agree_draw(
+        &self,
+        state: &mut GameState,
+        history: &History,
+    ) -> Result<ChessOutcome, ChessError> {
+        self.ensure_ongoing(state, history)?;
+        if self.fullmove_number(state) <= 1 {
+            return Err(ChessError::DrawAgreementUnavailable);
+        }
         let outcome = ChessOutcome::DrawAgreement;
         self.write_explicit_outcome(state, &outcome);
-        outcome
+        Ok(outcome)
     }
 
     pub fn claim_draw(
@@ -228,8 +251,110 @@ impl ChessRules {
         Ok(outcome)
     }
 
+    /// Returns legal moves that make a FIDE draw claim valid before the move is played.
+    ///
+    /// Article 9.2.1 allows a threefold claim when the indicated next move would
+    /// create the third occurrence. Article 9.3.1 does the same for the fifty-move
+    /// rule. The projected move is never committed to the authoritative state.
+    pub fn claimable_draw_moves(
+        &self,
+        state: &GameState,
+        history: &History,
+        claim: ChessDrawClaim,
+    ) -> Result<Vec<(crate::PseudoMove, Option<EntityTypeId>)>, ChessError> {
+        if self.status(state, history)?.outcome.is_some() {
+            return Ok(Vec::new());
+        }
+        let side = self.side_to_move(state)?;
+        let mut claimable = Vec::new();
+        for movement in self.legal_moves_for_side_with_history(state, Some(history), side)? {
+            let choices = self.move_choices(state, Some(history), movement, &nydra_core::StateMap::new())?;
+            if choices.is_empty() {
+                if self.projected_move_satisfies_claim(state, history, claim, movement, None)? {
+                    claimable.push((movement, None));
+                }
+                continue;
+            }
+            for choice in choices {
+                let promotion = choice
+                    .data
+                    .get("entity_type")
+                    .and_then(StateValue::as_u64)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .map(EntityTypeId::new);
+                if self.projected_move_satisfies_claim(state, history, claim, movement, promotion)? {
+                    claimable.push((movement, promotion));
+                }
+            }
+        }
+        Ok(claimable)
+    }
+
+    pub fn claim_draw_after_move(
+        &self,
+        state: &mut GameState,
+        history: &History,
+        claim: ChessDrawClaim,
+        movement: crate::PseudoMove,
+        promotion: Option<EntityTypeId>,
+    ) -> Result<ChessOutcome, ChessError> {
+        self.ensure_ongoing(state, history)?;
+        if !self.projected_move_satisfies_claim(state, history, claim, movement, promotion)? {
+            return Err(ChessError::InvalidDrawClaim);
+        }
+        let outcome = match claim {
+            ChessDrawClaim::ThreefoldRepetition => ChessOutcome::ThreefoldRepetition,
+            ChessDrawClaim::FiftyMoveRule => ChessOutcome::FiftyMoveRule,
+        };
+        self.write_explicit_outcome(state, &outcome);
+        Ok(outcome)
+    }
+
+    pub(crate) fn record_result(
+        &self,
+        state: &mut GameState,
+        winner: Option<PlayerId>,
+    ) -> Result<ChessOutcome, ChessError> {
+        let outcome = if let Some(winner) = winner {
+            let side = ChessSide::from_player(winner).ok_or(ChessError::UnknownSide(winner))?;
+            ChessOutcome::RecordedWin {
+                winner,
+                loser: side.opponent().player(),
+            }
+        } else {
+            ChessOutcome::RecordedDraw
+        };
+        self.write_explicit_outcome(state, &outcome);
+        Ok(outcome)
+    }
+
+    fn ensure_ongoing(&self, state: &GameState, history: &History) -> Result<(), ChessError> {
+        if self.status(state, history)?.outcome.is_some() {
+            return Err(ChessError::GameFinished);
+        }
+        Ok(())
+    }
+
+    fn projected_move_satisfies_claim(
+        &self,
+        state: &GameState,
+        history: &History,
+        claim: ChessDrawClaim,
+        movement: crate::PseudoMove,
+        promotion: Option<EntityTypeId>,
+    ) -> Result<bool, ChessError> {
+        let (projected, projected_history) =
+            self.simulate_notated_turn(state, history, movement, promotion)?;
+        Ok(match claim {
+            ChessDrawClaim::ThreefoldRepetition => {
+                self.repetition_count(&projected, &projected_history)? >= 3
+            }
+            ChessDrawClaim::FiftyMoveRule => self.halfmove_clock(&projected) >= 100,
+        })
+    }
+
     pub fn position_key(&self, state: &GameState, history: &History) -> Result<PositionKey, ChessError> {
-        self.position_key_after(state, history.previous_turn())
+        self.position_key_after(state, previous_chess_move(history))
     }
 
     pub fn repetition_count(&self, state: &GameState, history: &History) -> Result<usize, ChessError> {
@@ -245,19 +370,32 @@ impl ChessRules {
                 count += 1;
             }
         }
-        for turn in turns {
+        for turn in turns.iter().filter(|turn| turn_records_chess_move(turn)) {
             if self.position_key_after(&turn.after, Some(turn))? == target {
                 count += 1;
             }
         }
-        if turns.last().map(|turn| &turn.after) != Some(state)
-            && self.position_key_after(state, turns.last())? == target
-        {
+        let current_is_recorded = if let Some(previous) = previous_chess_move(history) {
+            self.position_key_after(&previous.after, Some(previous))? == target
+        } else if let Some(first) = turns.first() {
+            // A terminal metadata turn may exist before any real chess move (for
+            // example a PGN declared result). It does not make the unchanged
+            // initial position occur a second time.
+            self.position_key_after(&first.before, None)? == target
+        } else {
+            false
+        };
+        if !current_is_recorded {
             count += 1;
         }
         Ok(count)
     }
 
+    /// Sound hot-path recognition of standard material-dead positions.
+    ///
+    /// This deliberately returns `false` for exotic blocked-material positions that
+    /// would require arbitrary legal-reachability search to prove FIDE deadness.
+    /// False negatives are preferable here to declaring a playable position drawn.
     pub fn is_dead_position(&self, state: &GameState) -> bool {
         let non_kings = state
             .entities
@@ -404,6 +542,18 @@ impl ChessRules {
                     .ruleset_state
                     .insert(EXPLICIT_OUTCOME, "fifty_move_rule");
             }
+            ChessOutcome::RecordedWin { winner, loser } => {
+                state.ruleset_state.insert(EXPLICIT_OUTCOME, "recorded_win");
+                state
+                    .ruleset_state
+                    .insert(EXPLICIT_WINNER, u64::from(winner.get()));
+                state
+                    .ruleset_state
+                    .insert(EXPLICIT_LOSER, u64::from(loser.get()));
+            }
+            ChessOutcome::RecordedDraw => {
+                state.ruleset_state.insert(EXPLICIT_OUTCOME, "recorded_draw");
+            }
             _ => {}
         }
     }
@@ -437,10 +587,36 @@ impl ChessRules {
             "draw_agreement" => ChessOutcome::DrawAgreement,
             "threefold_repetition" => ChessOutcome::ThreefoldRepetition,
             "fifty_move_rule" => ChessOutcome::FiftyMoveRule,
+            "recorded_win" => {
+                let winner = state
+                    .ruleset_state
+                    .get(EXPLICIT_WINNER)
+                    .and_then(StateValue::as_u64)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .map(PlayerId::new)
+                    .ok_or(ChessError::InvalidOutcomeState)?;
+                let loser = state
+                    .ruleset_state
+                    .get(EXPLICIT_LOSER)
+                    .and_then(StateValue::as_u64)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .map(PlayerId::new)
+                    .ok_or(ChessError::InvalidOutcomeState)?;
+                ChessOutcome::RecordedWin { winner, loser }
+            }
+            "recorded_draw" => ChessOutcome::RecordedDraw,
             _ => return Err(ChessError::InvalidOutcomeState),
         };
         Ok(Some(outcome))
     }
+}
+
+fn turn_records_chess_move(turn: &TurnRecord) -> bool {
+    turn.steps.iter().any(|step| step.action.kind == "chess_move")
+}
+
+fn previous_chess_move(history: &History) -> Option<&TurnRecord> {
+    history.turns().iter().rev().find(|turn| turn_records_chess_move(turn))
 }
 
 fn square_color(position: Position) -> bool {

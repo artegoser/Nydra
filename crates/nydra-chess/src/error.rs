@@ -47,6 +47,8 @@ pub enum ChessError {
     MoveInputRejected(EntityId),
     #[error("standard chess requires exactly one active player")]
     InvalidTurnState,
+    #[error("draw by agreement is unavailable until both players have made at least one move")]
+    DrawAgreementUnavailable,
     #[error("the requested draw claim is not currently valid")]
     InvalidDrawClaim,
     #[error("stored chess outcome state is invalid")]
