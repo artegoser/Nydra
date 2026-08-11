@@ -531,7 +531,7 @@ Reference: [`BUILTIN_RULESETS.md`](./BUILTIN_RULESETS.md).
 - [x] Mutate another entity's custom state and remove it when Fireball damage reaches zero HP.
 - [x] Perform move + ability as two authoritative steps during one Rift turn.
 - [x] Force an additional checkers capture continuation after the first capture step.
-- [x] Read committed history for Go simple-ko legality.
+- [x] Read complete committed play history for AGA situational-superko legality.
 - [x] Restore selected Rift HP data from an older committed state.
 - [x] Create a Rift state with three `PlayerId`s.
 - [x] Demonstrate two players sharing one team while a third player belongs to another team.
@@ -540,13 +540,19 @@ Reference: [`BUILTIN_RULESETS.md`](./BUILTIN_RULESETS.md).
 - [x] Prove a primary game action can be placement/spawn rather than movement through the Go example.
 - [x] Prove transactional group capture by removing multiple Go entities from one placement.
 - [x] Prove ruleset-level outcomes for checkers, Go, and the synthetic team mode.
-- [x] Confirm all reference rulesets use existing generic choices, transactions, state, history, teams, abilities, and outcomes with no mechanic-specific core enum variants.
+- [x] Confirm all built-in non-chess rulesets use existing generic choices, transactions, state, history, teams, abilities, and outcomes with no mechanic-specific core enum variants.
 - [x] Expose all four built-in rulesets through one WASM `GameHandle` selected by ruleset ID.
 - [x] Add a Svelte ruleset selector and make chess, checkers, Go, and Rift playable through the shared board/interaction pipeline.
 - [x] Keep FEN/PGN as chess-only capabilities rather than leaking them into the generic runtime contract.
 - [x] Render ruleset-owned entity presentation assets and Rift HP/mana without frontend legality logic.
 - [x] Verify Go board-position choices work without selecting or moving an existing entity.
 - [x] Delete the temporary `nydra-examples` crate once the rulesets are independently runnable.
+- [x] Replace the 9×9/living-stone Go proof with a configurable 9×9/13×13/19×19 AGA ruleset.
+- [x] Implement pass stones, two-pass scoring review, independent dead-group assessment, dispute resume, and White-last-pass handling.
+- [x] Implement exact-half-point AGA territory and area scoring with current even/handicap komi and area handicap compensation.
+- [x] Implement standard 19×19 fixed handicap setup and one-stone-handicap semantics.
+- [x] Render Go on intersections with conventional hoshi points rather than chess-style square centres.
+- [x] Document Go completeness and tournament/session boundaries in `GO_RULES_AUDIT.md`.
 
 ## Phase 17 — Generic action notation and deterministic replay
 

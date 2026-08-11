@@ -819,10 +819,10 @@ Standard pawn promotion is the first production proof: `Pawn` owns the trigger, 
 Implement the built-in proof rulesets described in [`BUILTIN_RULESETS.md`](./BUILTIN_RULESETS.md) as independent crates: `nydra-checkers`, `nydra-go`, and `nydra-rift`. Each mode must run through the same WASM `GameHandle`, interaction protocol, Svelte board renderer, transition animation path, history, and undo/redo pipeline as chess while adding no mechanic-specific concepts to `nydra-core`.
 
 - checkers proves mandatory capture, forced multi-capture continuation, piece-local promotion state, and multiple authoritative steps in one turn;
-- Go proves placement via entity spawning, group capture, pass, suicide rejection, and simple ko derived from committed history;
+- Go proves placement via entity spawning, group capture, pass stones, suicide rejection, full-history situational superko, multi-phase dead-group review, AGA territory/area scoring, komi, and handicap;
 - Rift proves arbitrary HP/mana state, explicit abilities, move + ability turns, target/option continuations, entity removal, history-derived rewind, three players/two teams, controller changes independent of owner, presentation cues, and team-level outcomes.
 
-These are compact playable reference rulesets, not claims of tournament-complete implementations. Production matchmaking, exhaustive variant coverage, polished human notation, and mode-specific production UX remain out of scope. Their web UI exists to prove the complete runtime pipeline rather than only the Rust API surface.
+The built-ins share the architecture-proof role but may mature independently. `nydra-go` now targets complete digital AGA board/scoring semantics; see [`GO_RULES_AUDIT.md`](./GO_RULES_AUDIT.md). Production matchmaking, tournament administration, exhaustive external record formats, and mode-specific production polish remain separate concerns.
 
 
 ### Phase 17 — Generic action notation and deterministic replay

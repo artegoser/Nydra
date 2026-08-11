@@ -1,10 +1,10 @@
-# Nydra Built-in Reference Rulesets
+# Nydra Built-in Rulesets
 
 ## Purpose
 
-Phase 16 now ships three compact reference rulesets alongside chess: `nydra-checkers`, `nydra-go`, and `nydra-rift`. They are intentionally playable through the same WASM and Svelte runtime rather than existing only as test fixtures.
+Phase 16 ships three built-in rulesets alongside chess: `nydra-checkers`, `nydra-go`, and `nydra-rift`. They are intentionally playable through the same WASM and Svelte runtime rather than existing only as test fixtures.
 
-Their purpose is architectural verification. They are not claims of tournament-complete checkers/Go implementations or production-balanced game modes. A reference ruleset may stay deliberately small, but it must exercise the real end-to-end path:
+All built-ins serve architectural verification, but ruleset completeness is tracked independently. In particular, `nydra-go` now targets the full digital AGA board/scoring rules described in [`GO_RULES_AUDIT.md`](./GO_RULES_AUDIT.md); it is no longer a 9×9/simple-ko scoring proof. Checkers and Rift retain their own current scope. Every built-in must exercise the real end-to-end path:
 
 ```text
 ruleset crate
@@ -32,19 +32,26 @@ No checkers-, Go-, or Rift-specific variant may be added to a generic `nydra-cor
 
 ## Go
 
-`nydra-go` demonstrates a game whose primary action is placement rather than movement:
+`nydra-go` is a playable digital AGA ruleset and a placement-game architecture proof:
 
-- the built-in board is 9×9 for compact interactive testing;
-- a legal board point is exposed directly as `SelectPosition`, with no selected entity;
+- default 19×19 board, plus 9×9 and 13×13 even/one-stone-handicap games;
+- legal board points are exposed directly as `SelectPosition`, with no selected entity;
 - placement uses generic entity spawning;
 - connected groups and liberties are derived from current state;
-- captures remove arbitrary groups transactionally;
-- suicide is rejected by the ruleset;
-- pass is an ordinary `SelectOption` choice;
-- simple ko is derived from the immediately previous committed board position;
-- two consecutive passes feed a ruleset-level terminal outcome.
+- captures remove arbitrary groups transactionally and become prisoners;
+- self-capture is rejected;
+- AGA situational superko is derived from the complete committed play history;
+- pass stones are tracked as prisoners;
+- two consecutive passes enter dead-group scoring review;
+- disagreement can resume ordinary play and immediate post-dispute passes score remaining stones alive;
+- White makes the required final pass when Black would otherwise have passed last;
+- territory and area counting are both available with exact half-point komi;
+- current AGA 7.5 even-game / 0.5 handicap komi is supported;
+- standard 19×19 fixed handicaps 2–9 and one-stone handicap semantics are supported;
+- resignation is an authoritative terminal outcome;
+- the browser renders stones on Go-line intersections with conventional hoshi points.
 
-The current terminal score intentionally uses living-stone count instead of complete territory/dead-stone scoring. Full Go scoring is not required for the architecture proof.
+Detailed coverage and deliberate tournament/session boundaries are documented in [`GO_RULES_AUDIT.md`](./GO_RULES_AUDIT.md).
 
 ## Rift
 
@@ -63,13 +70,14 @@ The current terminal score intentionally uses living-stone count instead of comp
 
 ## Shared browser runtime
 
-The browser boundary exposes one runtime constructor:
+The browser boundary exposes the generic runtime constructor plus ruleset-specific configuration constructors where a game genuinely has setup parameters:
 
 ```text
 new_game("chess")
 new_game("checkers")
-new_game("go")
+new_game("go")          # standard 19x19 AGA game
 new_game("rift")
+new_go(size, scoring, handicap)
 ```
 
 All return the same `GameHandle` interface for:
@@ -90,7 +98,7 @@ The built-ins cover materially different action models:
 ```text
 chess:    entity -> move -> optional piece-local continuation
 checkers: entity -> capture -> forced capture continuation
-Go:       board position -> spawn -> group capture -> history legality
+Go:       board position -> spawn -> group capture -> superko -> scoring review
 Rift:     entity -> move -> ability -> target -> option -> arbitrary mutation
 ```
 

@@ -7,7 +7,7 @@ Nydra is a local-first programmable game runtime with a Svelte frontend. Its gen
 - `crates/nydra-core` — generic state, history, turns, interaction, and runtime primitives.
 - `crates/nydra-chess` — standard chess rules built on the generic core.
 - `crates/nydra-checkers` — playable compact checkers ruleset.
-- `crates/nydra-go` — playable compact 9×9 Go ruleset.
+- `crates/nydra-go` — playable digital AGA Go ruleset with 9×9/13×13/19×19 boards, superko, scoring review, komi and handicap.
 - `crates/nydra-rift` — playable synthetic tactical ruleset for abilities, teams and history mechanics.
 - `crates/nydra-wasm` — browser bindings for the Rust runtime.
 - `src` — SvelteKit presentation and input layer.
@@ -17,7 +17,8 @@ Nydra is a local-first programmable game runtime with a Svelte frontend. Its gen
 - `docs/GENERIC_ACTION_NOTATION.md` — ruleset-agnostic action recording and deterministic replay specification.
 - `docs/GENERIC_OUTCOME_RULES.md` — ruleset-wide terminal outcome contract and precedence rules.
 - `docs/GENERIC_GAME_RULES.md` — composition contract for entity-local and ruleset-wide mechanics.
-- `docs/BUILTIN_RULESETS.md` — Phase 16 built-in reference rulesets.
+- `docs/BUILTIN_RULESETS.md` — Phase 16 built-in rulesets and shared-runtime coverage.
+- `docs/GO_RULES_AUDIT.md` — digital AGA Go rules/scoring coverage and explicit session-layer boundaries.
 
 ## Requirements
 
