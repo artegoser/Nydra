@@ -522,12 +522,13 @@ Implement enough rule state/history inspection for a complete standard game:
 - checkmate;
 - stalemate;
 - resignation;
-- draw by agreement state/API;
-- threefold repetition as a claimable draw condition;
+- resignation and mutually agreed terminal outcomes recorded in authoritative history;
+- draw by agreement only once both players have made at least one move;
+- threefold repetition claims both from the current position and by declaring a legal next move that would create the third occurrence;
 - fivefold repetition as an automatic draw condition;
-- fifty-move rule as a claimable draw condition;
-- seventy-five-move rule as an automatic draw condition;
-- dead-position detection for positions in which checkmate cannot occur by any legal sequence.
+- fifty-move claims both after 50 moves by each player and by declaring the legal next move that would complete that threshold;
+- seventy-five-move rule as an automatic draw condition, with checkmate precedence;
+- sound dead-position recognition, with exact arbitrary blocked-position reachability kept as an explicit limitation rather than approximated.
 
 Do not approximate repetition using only piece placement. The position key must include all information relevant to legal move possibilities, including side to move and effective special rights.
 
@@ -553,7 +554,7 @@ Do not introduce a permanent global en-passant flag just to accommodate FEN.
 
 ### Limitations
 
-When FEN cannot reconstruct real historical facts, retain only the minimum semantics required for correct continuation from the imported position. Do not pretend that exact pre-import history is known.
+When FEN cannot reconstruct real historical facts, retain only the minimum semantics required for correct continuation from the imported position. Do not pretend that exact pre-import history is known. Validate standard structural legality on import (piece/pawn counts, promotion feasibility, king legality, castling metadata, and en-passant consistency), while recognizing that FEN alone cannot prove arbitrary retrograde reachability.
 
 ## 11. WASM/browser API
 
@@ -771,11 +772,11 @@ Implement:
 
 ### Phase 9 — Game outcomes and draws
 
-Implement mate, stalemate, resignation/agreement APIs, repetition rules, fifty/seventy-five move rules, and dead-position handling.
+Implement mate, stalemate, authoritative resignation/agreement terminal turns, current and intended-move repetition/50-move claims, automatic fivefold/seventy-five-move rules, and sound dead-position handling.
 
 ### Phase 10 — FEN
 
-Implement robust Rust FEN import/export plus minimal synthetic state/history reconstruction for FEN castling/en-passant semantics.
+Implement robust Rust FEN import/export, standard structural legality validation, and minimal synthetic state/history reconstruction for FEN castling/en-passant semantics.
 
 ### Phase 11 — WASM bridge
 
@@ -799,7 +800,9 @@ Complete perft and special-rule regression coverage. Fix all discrepancies befor
 
 ### Phase 15 — SAN and PGN
 
-Add SAN move generation and PGN import/export after legal move semantics and history are stable.
+Add SAN move generation and tolerant legal SAN resolution plus PGN main-line import/export, tag preservation, and authoritative terminal `Result` handling after legal move semantics and history are stable.
+
+The detailed standard-chess coverage audit is maintained in [`CHESS_RULES_AUDIT.md`](./CHESS_RULES_AUDIT.md).
 
 ### Generic ruleset outcome architecture
 

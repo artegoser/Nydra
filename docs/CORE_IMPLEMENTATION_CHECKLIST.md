@@ -240,14 +240,18 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 - [x] Detect stalemate.
 - [x] Add resignation outcome/API.
 - [x] Add draw-by-agreement outcome/API.
+- [x] Reject draw-by-agreement recording until both players have made at least one move.
+- [x] Record resignation/agreement/accepted claims as authoritative timeline turns so undo/redo restores them normally.
 - [x] Build a repetition-equivalence position key.
 - [x] Include side to move in repetition equivalence.
 - [x] Include effective castling possibilities in repetition equivalence.
 - [x] Include effective en-passant possibilities in repetition equivalence.
-- [x] Detect claimable threefold repetition.
+- [x] Detect claimable threefold repetition in the current position.
+- [x] Detect legal declared next moves that would create the third repetition without committing the move.
 - [x] Detect automatic fivefold repetition.
 - [x] Track/reset the halfmove clock semantics needed for draw rules.
-- [x] Detect claimable fifty-move rule.
+- [x] Detect claimable fifty-move rule in the current position.
+- [x] Detect legal declared next moves that would complete the 50-move threshold without committing the move.
 - [x] Detect automatic seventy-five-move rule.
 - [x] Implement dead-position detection for standard material-dead classes (K vs K, K+B/K+N vs K, same-color bishops only).
 - [ ] Exhaustive recognition of arbitrary dead positions with blocked material/pawns; this requires reachability search and is intentionally deferred from the hot-path rules runtime.
@@ -268,6 +272,8 @@ This checklist tracks the implementation described in `CORE_IMPLEMENTATION_PLAN.
 - [x] Synthesize minimal previous pawn state/action for imported en-passant target semantics.
 - [x] Keep synthetic import history clearly distinct from known real history internally if needed.
 - [x] Add FEN validation/errors.
+- [x] Reject structurally impossible standard FEN material/pawn/king states.
+- [x] Keep terminal outcome metadata from erasing the immediately preceding FEN en-passant target.
 - [x] Add FEN roundtrip tests.
 - [x] Add imported castling/en-passant continuation tests.
 
@@ -470,6 +476,10 @@ Reference: [`LICHESS_BOARD_UX_SPEC.md`](./LICHESS_BOARD_UX_SPEC.md). The target 
 - [x] Generate SAN check/checkmate suffixes.
 - [x] Export PGN from game history.
 - [x] Import standard PGN main line.
+- [x] Preserve and validate PGN `Result` instead of silently treating declared terminal games as ongoing.
+- [x] Preserve source tags while recomputing authoritative `Result`/setup tags on export.
+- [x] Accept common SAN annotations/NAGs while resolving through legal-move authority.
+- [x] Reject PGN result declarations that conflict with a naturally terminal board.
 - [x] Test PGN/FEN interoperability where applicable.
 
 ## Generic outcome architecture
