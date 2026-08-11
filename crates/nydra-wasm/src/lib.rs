@@ -15,8 +15,9 @@ use nydra_core::{
     RecordedAction, StateDelta, StateMap, StepRecord, TeamState, TurnState,
 };
 use nydra_go::{
-    empty_state as empty_go_state, registry as go_registry, GoInteractionRules, BLACK as GO_BLACK,
-    WHITE as GO_WHITE,
+    registry as go_registry, state_from_config as go_state_from_config, status_details as go_status_details,
+    status_text as go_status_text, title as go_title, turn_notation as go_turn_notation, GoConfig,
+    GoInteractionRules, GoScoring,
 };
 use nydra_rift::{
     registry as rift_registry, standard_state as standard_rift_state, RiftInteractionRules,
@@ -38,6 +39,19 @@ pub fn new_game(ruleset: &str) -> Result<GameHandle, JsValue> {
 #[wasm_bindgen]
 pub fn new_chess() -> Result<GameHandle, JsValue> {
     GameHandle::new_ruleset("chess").map_err(js_error)
+}
+
+#[wasm_bindgen]
+pub fn new_go(size: u16, scoring: &str, handicap: u8) -> Result<GameHandle, JsValue> {
+    let scoring = match scoring {
+        "territory" => GoScoring::Territory,
+        "area" => GoScoring::Area,
+        other => return Err(js_error(format!("unknown Go scoring method '{other}'"))),
+    };
+    let config = GoConfig::aga(size, scoring, handicap).map_err(js_error)?;
+    Ok(GameHandle {
+        inner: Runtime::Go(GoRuntime::new(config).map_err(js_error)?),
+    })
 }
 
 #[wasm_bindgen]
@@ -295,7 +309,7 @@ impl GameHandle {
         let turns = match &self.inner {
             Runtime::Chess(runtime) => runtime.history_view().map_err(js_error)?,
             Runtime::Checkers(runtime) => generic_history_view(runtime.timeline.history(), "checkers"),
-            Runtime::Go(runtime) => generic_history_view(runtime.timeline.history(), "go"),
+            Runtime::Go(runtime) => go_history_view(runtime.timeline.history(), runtime.timeline.current().board.width()),
             Runtime::Rift(runtime) => generic_history_view(runtime.timeline.history(), "rift"),
         };
         to_js(&turns)
@@ -693,7 +707,11 @@ impl CheckersRuntime {
 
 impl GoRuntime {
     fn standard() -> Result<Self, String> {
-        let timeline = GameTimeline::new(empty_go_state(9)).map_err(string_error)?;
+        Self::new(GoConfig::standard())
+    }
+    fn new(config: GoConfig) -> Result<Self, String> {
+        let state = go_state_from_config(config).map_err(string_error)?;
+        let timeline = GameTimeline::new(state).map_err(string_error)?;
         let mut runtime = Self { timeline, interaction: None };
         runtime.rebuild_interaction()?;
         Ok(runtime)
@@ -705,7 +723,8 @@ impl GoRuntime {
         }
         let actor = active_actor(self.timeline.current(), "go")?;
         let turn = self.timeline.begin_turn(actor).map_err(string_error)?;
-        self.interaction = Some(InteractionDriver::new(GoInteractionRules::with_history(self.timeline.history()), turn).map_err(string_error)?);
+        let rules = GoInteractionRules::with_history(self.timeline.history()).map_err(string_error)?;
+        self.interaction = Some(InteractionDriver::new(rules, turn).map_err(string_error)?);
         Ok(())
     }
     fn choose(&mut self, id: ChoiceId) -> Result<(bool, Vec<StepRecord>), String> { let result = choose_driver(&mut self.interaction, &mut self.timeline, id)?; if result.0 { self.rebuild_interaction()?; } Ok(result) }
@@ -716,9 +735,20 @@ impl GoRuntime {
         let registry = go_registry();
         let entities = presentation_entities(&registry, state, self.timeline.history())?;
         let outcome = registry.outcome(RuleContext::from_state(state, Some(self.timeline.history()))).map_err(string_error)?;
-        let active = state.turn.active_players.first().copied();
-        let status = match active { Some(GO_BLACK) => "Black to place", Some(GO_WHITE) => "White to place", _ => "Go" };
-        Ok(GameView::new("go", "Go 9×9", "go", state, entities, outcome.as_ref().map(outcome_text).unwrap_or_else(|| status.to_owned()), outcome, None, StateMap::new(), self.timeline.can_undo(), self.timeline.can_redo(), last_action_view(self.timeline.history())))
+        Ok(GameView::new(
+            "go",
+            &go_title(state),
+            "go",
+            state,
+            entities,
+            go_status_text(state),
+            outcome,
+            None,
+            go_status_details(state),
+            self.timeline.can_undo(),
+            self.timeline.can_redo(),
+            last_action_view(self.timeline.history()),
+        ))
     }
     fn interaction_view(&self) -> InteractionView {
         let Some(driver) = self.interaction.as_ref() else { return InteractionView::default(); };
@@ -860,6 +890,19 @@ fn movement_endpoints(turn: &nydra_core::TurnRecord) -> Option<MoveEndpointsView
         }
     }
     None
+}
+
+fn go_history_view(history: &nydra_core::History, board_size: u16) -> Vec<HistoryTurnView> {
+    history.turns().iter().enumerate().filter(|(_, turn)| !turn.synthetic).map(|(index, turn)| {
+        HistoryTurnView {
+            index: u32::try_from(index).unwrap_or(u32::MAX),
+            actor: turn.actor.get(),
+            turn_number: u32::try_from(index + 1).unwrap_or(u32::MAX),
+            actor_label: if turn.actor == nydra_go::BLACK { "Black".into() } else if turn.actor == nydra_go::WHITE { "White".into() } else { format!("P{}", turn.actor.get()) },
+            notation: go_turn_notation(turn, board_size),
+            actions: action_views(turn),
+        }
+    }).collect()
 }
 
 fn generic_history_view(history: &nydra_core::History, ruleset: &str) -> Vec<HistoryTurnView> {

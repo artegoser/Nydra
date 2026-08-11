@@ -1,4 +1,5 @@
 export type RulesetId = 'chess' | 'checkers' | 'go' | 'rift';
+export type GoScoring = 'territory' | 'area';
 
 export interface PositionView {
 	x: number;
@@ -169,6 +170,7 @@ interface WasmHandle {
 interface WasmModule {
 	default(): Promise<unknown>;
 	new_game(ruleset: string): WasmHandle;
+	new_go(size: number, scoring: string, handicap: number): WasmHandle;
 	from_fen(fen: string): WasmHandle;
 	from_pgn(pgn: string): WasmHandle;
 }
@@ -190,6 +192,15 @@ export class LocalGame {
 	static async create(ruleset: RulesetId): Promise<LocalGame> {
 		const wasm = await loadModule();
 		return new LocalGame(wasm.new_game(ruleset));
+	}
+
+	static async createGo(
+		size: number,
+		scoring: GoScoring = 'territory',
+		handicap = 0
+	): Promise<LocalGame> {
+		const wasm = await loadModule();
+		return new LocalGame(wasm.new_go(size, scoring, handicap));
 	}
 
 	static async fromFen(fen: string): Promise<LocalGame> {
