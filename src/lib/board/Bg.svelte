@@ -4,6 +4,7 @@
 	export let width: number;
 	export let height: number;
 	export let orientation: 'white' | 'black' = 'white';
+	export let boardStyle: 'checkerboard' | 'go' = 'checkerboard';
 	export let showCoordinates = true;
 
 	function boardX(col: number) {
@@ -15,7 +16,7 @@
 	}
 </script>
 
-<div class="board-layer board-background" style="--width: {width}; --height: {height};" aria-hidden="true">
+<div class="board-layer board-background" class:go-board={boardStyle === 'go'} style="--width: {width}; --height: {height};" aria-hidden="true">
 	{#each { length: height } as _, row}
 		{#each { length: width } as _, col}
 			{@const x = boardX(col)}

@@ -1,6 +1,37 @@
+export type RulesetId = 'chess' | 'checkers' | 'go' | 'rift';
+
 export interface PositionView {
 	x: number;
 	y: number;
+}
+
+export type StateValueView =
+	| { type: 'bool'; value: boolean }
+	| { type: 'i64'; value: number }
+	| { type: 'u64'; value: number }
+	| { type: 'f64'; value: number }
+	| { type: 'string'; value: string }
+	| { type: 'list'; value: StateValueView[] }
+	| { type: 'map'; value: StateMapView };
+
+export type StateMapView = Record<string, StateValueView>;
+
+export function stateScalar(
+	data: StateMapView | null | undefined,
+	key: string
+): string | number | boolean | null {
+	const value = data?.[key];
+	if (!value) return null;
+	switch (value.type) {
+		case 'bool':
+		case 'i64':
+		case 'u64':
+		case 'f64':
+		case 'string':
+			return value.value;
+		default:
+			return null;
+	}
 }
 
 export interface EntityView {
@@ -11,21 +42,24 @@ export interface EntityView {
 	position: PositionView;
 	asset_key: string;
 	label: string | null;
-	presentation_data: unknown;
-	state: unknown;
+	presentation_data: StateMapView;
+	state: StateMapView;
+}
+
+export interface OutcomeView {
+	key: string;
+	winners: number[];
+	losers: number[];
+	winning_teams: number[];
+	losing_teams: number[];
+	data: StateMapView;
 }
 
 export interface StatusView {
-	side_to_move: 'white' | 'black';
-	in_check: boolean;
-	checked_king: PositionView | null;
-	outcome: string | null;
-	winner: number | null;
-	loser: number | null;
-	repetition_count: number;
-	halfmove_clock: number;
-	can_claim_threefold_repetition: boolean;
-	can_claim_fifty_move_rule: boolean;
+	text: string;
+	outcome: OutcomeView | null;
+	checked_position: PositionView | null;
+	details: StateMapView;
 }
 
 export interface MoveEndpointsView {
@@ -34,6 +68,9 @@ export interface MoveEndpointsView {
 }
 
 export interface GameView {
+	ruleset: RulesetId;
+	title: string;
+	board_style: 'checkerboard' | 'go';
 	width: number;
 	height: number;
 	entities: EntityView[];
@@ -58,13 +95,14 @@ export interface ChoiceView {
 	target_position: PositionView | null;
 	option_entity_type: number | null;
 	asset_key: string | null;
-	data: unknown;
+	data: StateMapView;
 }
 
 export interface InteractionView {
 	generation: string;
 	selected_entity: number | null;
 	pending_target: PositionView | null;
+	active_ability: number | null;
 	choices: ChoiceView[];
 }
 
@@ -75,7 +113,7 @@ export interface ChangeView {
 
 export interface PresentationView {
 	kind: string;
-	data: unknown;
+	data: StateMapView;
 }
 
 export interface TransitionView {
@@ -89,13 +127,14 @@ export interface TransitionView {
 export interface HistoryTurnView {
 	index: number;
 	actor: number;
-	move_number: number;
-	side: 'white' | 'black';
-	san: string;
-	actions: Array<{ kind: string; data: unknown }>;
+	turn_number: number;
+	actor_label: string;
+	notation: string;
+	actions: Array<{ kind: string; data: StateMapView }>;
 }
 
 interface WasmHandle {
+	ruleset(): string;
 	view(): GameView;
 	interaction(): InteractionView;
 	choose(choiceId: string): TransitionView;
@@ -112,7 +151,7 @@ interface WasmHandle {
 
 interface WasmModule {
 	default(): Promise<unknown>;
-	new_chess(): WasmHandle;
+	new_game(ruleset: string): WasmHandle;
 	from_fen(fen: string): WasmHandle;
 	from_pgn(pgn: string): WasmHandle;
 }
@@ -128,22 +167,26 @@ async function loadModule(): Promise<WasmModule> {
 	return modulePromise;
 }
 
-export class LocalChessGame {
+export class LocalGame {
 	private constructor(private readonly handle: WasmHandle) {}
 
-	static async create(): Promise<LocalChessGame> {
+	static async create(ruleset: RulesetId): Promise<LocalGame> {
 		const wasm = await loadModule();
-		return new LocalChessGame(wasm.new_chess());
+		return new LocalGame(wasm.new_game(ruleset));
 	}
 
-	static async fromFen(fen: string): Promise<LocalChessGame> {
+	static async fromFen(fen: string): Promise<LocalGame> {
 		const wasm = await loadModule();
-		return new LocalChessGame(wasm.from_fen(fen));
+		return new LocalGame(wasm.from_fen(fen));
 	}
 
-	static async fromPgn(pgn: string): Promise<LocalChessGame> {
+	static async fromPgn(pgn: string): Promise<LocalGame> {
 		const wasm = await loadModule();
-		return new LocalChessGame(wasm.from_pgn(pgn));
+		return new LocalGame(wasm.from_pgn(pgn));
+	}
+
+	ruleset(): RulesetId {
+		return this.handle.ruleset() as RulesetId;
 	}
 
 	view(): GameView {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { stateScalar } from '$lib/wasm/runtime';
 	import type {
 		ChoiceView,
 		EntityView,
@@ -59,10 +60,13 @@
 	}
 
 	function assetPathFromKey(assetKey: string) {
-		const [, side, kind] = assetKey.split('/');
-		const directory = side === 'white' ? 'W' : 'B';
-		const filename = kind ? kind[0].toUpperCase() + kind.slice(1) : 'Pawn';
-		return `/pieces/${directory}/${filename}.svg`;
+		if (assetKey.startsWith('chess/')) {
+			const [, side, kind] = assetKey.split('/');
+			const directory = side === 'white' ? 'W' : 'B';
+			const filename = kind ? kind[0].toUpperCase() + kind.slice(1) : 'Pawn';
+			return `/pieces/${directory}/${filename}.svg`;
+		}
+		return `/rulesets/${assetKey}.svg`;
 	}
 
 	function display(
@@ -137,13 +141,17 @@
 			.map((choice) => [choice.entity, choice])
 	);
 	$: positionChoices = interaction.choices.filter(
-		(choice): choice is ChoiceView & { position: PositionView; actor: number } =>
-			choice.kind === 'select_position' && choice.position != null && choice.actor != null
+		(choice): choice is ChoiceView & { position: PositionView } =>
+			choice.kind === 'select_position' && choice.position != null
 	);
 	$: visualActor = drag?.entityId ?? interaction.selected_entity;
-	$: visibleDestinations =
-		visualActor == null ? [] : positionChoices.filter((choice) => choice.actor === visualActor);
+	$: visibleDestinations = positionChoices.filter(
+		(choice) => choice.actor == null || (visualActor != null && choice.actor === visualActor)
+	);
 	$: destinationBySquare = new Map(visibleDestinations.map((choice) => [key(choice.position), choice]));
+	$: draggableEntityIds = new Set(
+		positionChoices.filter((choice) => choice.actor != null).map((choice) => choice.actor as number)
+	);
 	$: selectedPosition =
 		visualActor == null ? null : (entitiesById.get(visualActor)?.position ?? drag?.origin ?? null);
 	$: optionChoices = interaction.choices.filter(
@@ -154,6 +162,12 @@
 	function choiceForMove(actor: number, position: PositionView) {
 		return positionChoices.find(
 			(choice) => choice.actor === actor && samePosition(choice.position, position)
+		);
+	}
+
+	function globalChoiceForPosition(position: PositionView) {
+		return positionChoices.find(
+			(choice) => choice.actor == null && samePosition(choice.position, position)
 		);
 	}
 
@@ -218,7 +232,7 @@
 		}
 		if (event.button !== 0) return;
 		const entity = entitiesBySquare.get(key(position));
-		if (!entity || !entityChoices.has(entity.id)) return;
+		if (!entity || !entityChoices.has(entity.id) || !draggableEntityIds.has(entity.id)) return;
 		cancelEntityAnimation(entity.id);
 		if (arrows.length || squareAnnotations.length) clearAnnotations();
 		drag = {
@@ -311,9 +325,14 @@
 		}
 		if (interaction.selected_entity != null) {
 			const choice = choiceForMove(interaction.selected_entity, position);
-			if (choice) onchoice(choice.id);
-			else oncancel();
+			if (choice) {
+				onchoice(choice.id);
+				return;
+			}
 		}
+		const globalChoice = globalChoiceForPosition(position);
+		if (globalChoice) onchoice(globalChoice.id);
+		else if (interaction.selected_entity != null) oncancel();
 	}
 
 	async function startTransitionAnimation() {
@@ -440,9 +459,9 @@
 					class="board-state-square"
 					class:selected={samePosition(selectedPosition, position)}
 					class:last-move={samePosition(game.last_move?.from, position) || samePosition(game.last_move?.to, position)}
-					class:check={samePosition(game.status.checked_king, position)}
-					class:move-dest={destination != null && !occupied}
-					class:capture-dest={destination != null && occupied}
+					class:check={samePosition(game.status.checked_position, position)}
+					class:move-dest={destination != null && !occupied && game.board_style !== 'go'}
+					class:capture-dest={destination != null && occupied && game.board_style !== 'go'}
 					class:destination-hover={destination != null && samePosition(hover, position)}
 					style={squareStyle(position, orientation, game.width, game.height)}
 				></div>
@@ -490,6 +509,8 @@
 			/>
 		{/each}
 		{#each game.entities as entity (entity.id)}
+			{@const hp = stateScalar(entity.presentation_data, 'hp')}
+			{@const mana = stateScalar(entity.presentation_data, 'mana')}
 			{#if drag?.started && drag.entityId === entity.id}
 				<img class="piece-node origin-ghost" data-entity-id={entity.id} style={fadingStyle(entity, orientation, game.width, game.height)} src={assetPathFromKey(assetOverrides[entity.id] ?? entity.asset_key)} alt="" draggable="false" />
 			{/if}
@@ -502,10 +523,16 @@
 				alt=""
 				draggable="false"
 			/>
+			{#if hp != null}
+				<div class="entity-stats" style={fadingStyle(entity, orientation, game.width, game.height)}>
+					<span>HP {hp}</span>
+					{#if mana != null}<span>MP {mana}</span>{/if}
+				</div>
+			{/if}
 		{/each}
 	</div>
 
-	<div class="hit-layer" role="group" aria-label="Chess board">
+	<div class="hit-layer" role="group" aria-label={`${game.title} board`}>
 		{#each { length: game.height } as _, row}
 			{#each { length: game.width } as _, col}
 				{@const x = orientation === 'white' ? col : game.width - col - 1}
@@ -515,7 +542,8 @@
 				<button
 					type="button"
 					class="board-hit-square"
-					class:movable-origin={entity != null && entityChoices.has(entity.id)}
+					class:movable-origin={entity != null && draggableEntityIds.has(entity.id)}
+					class:selectable-entity={entity != null && entityChoices.has(entity.id)}
 					class:legal-target={destinationBySquare.has(key(position))}
 					aria-label={entity?.label ? `${entity.label} on ${x + 1},${y + 1}` : `Square ${x + 1},${y + 1}`}
 					on:pointerenter={() => handleSquareEnter(position)}
@@ -528,16 +556,16 @@
 		{/each}
 	</div>
 
-	{#if optionChoices.length > 0 && interaction.pending_target}
+	{#if optionChoices.some((choice) => choice.asset_key) && interaction.pending_target}
 		{@const shown = display(interaction.pending_target, orientation, game.width, game.height)}
 		<div
 			class="promotion-menu"
 			class:from-top={shown.y === 0}
 			class:from-bottom={shown.y !== 0}
 			style={`left:${(shown.x * 100) / game.width}%;${shown.y === 0 ? 'top:0;' : 'bottom:0;'}width:${100 / game.width}%;`}
-			aria-label="Choose promotion piece"
+			aria-label="Choose option"
 		>
-			{#each optionChoices as choice}
+			{#each optionChoices.filter((choice) => choice.asset_key) as choice}
 				<button type="button" on:click={() => onchoice(choice.id)} aria-label={choice.label ?? choice.option_key}>
 					{#if choice.asset_key}<img src={assetPathFromKey(choice.asset_key)} alt={choice.label ?? choice.option_key} draggable="false" />{/if}
 				</button>
