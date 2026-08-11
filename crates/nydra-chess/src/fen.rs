@@ -50,6 +50,7 @@ impl ChessRules {
         self.king(&state, ChessSide::White)?;
         self.king(&state, ChessSide::Black)?;
         state.validate()?;
+        self.validate_imported_position(&state, side_to_move)?;
 
         if fields[3] == "-" {
             return Ok(FenGame {
@@ -142,6 +143,79 @@ impl ChessRules {
             timeline,
             synthetic_history_len: 1,
         })
+    }
+
+    fn validate_imported_position(
+        &self,
+        state: &GameState,
+        side_to_move: ChessSide,
+    ) -> Result<(), ChessError> {
+        if state.entities.len() > 32 {
+            return Err(ChessError::InvalidFen(
+                "unsupported position: more than 32 pieces".into(),
+            ));
+        }
+
+        for side in [ChessSide::White, ChessSide::Black] {
+            let pieces = state
+                .entities
+                .values()
+                .filter(|entity| entity.owner == side.player())
+                .collect::<Vec<_>>();
+            if pieces.len() > 16 {
+                return Err(ChessError::InvalidFen(format!(
+                    "unsupported position: {} has more than sixteen pieces",
+                    match side { ChessSide::White => "white", ChessSide::Black => "black" }
+                )));
+            }
+            let pawns = pieces
+                .iter()
+                .filter(|entity| entity.entity_type == PAWN)
+                .count();
+            if pawns > 8 {
+                return Err(ChessError::InvalidFen(format!(
+                    "unsupported position: {} has more than eight pawns",
+                    match side { ChessSide::White => "white", ChessSide::Black => "black" }
+                )));
+            }
+            if pieces
+                .iter()
+                .any(|entity| entity.entity_type == PAWN && (entity.position.y == 0 || entity.position.y == 7))
+            {
+                return Err(ChessError::InvalidFen(
+                    "unsupported position: pawn on the first or eighth rank".into(),
+                ));
+            }
+
+            let count = |piece_type: EntityTypeId| {
+                pieces
+                    .iter()
+                    .filter(|entity| entity.entity_type == piece_type)
+                    .count()
+            };
+            let promoted_material = count(KNIGHT).saturating_sub(2)
+                + count(BISHOP).saturating_sub(2)
+                + count(ROOK).saturating_sub(2)
+                + count(QUEEN).saturating_sub(1);
+            if promoted_material > 8_usize.saturating_sub(pawns) {
+                return Err(ChessError::InvalidFen(format!(
+                    "unsupported position: {} has more promoted material than missing pawns can explain",
+                    match side { ChessSide::White => "white", ChessSide::Black => "black" }
+                )));
+            }
+        }
+
+        // A legal game can leave the side to move in check, but the player who just
+        // moved may not have left their own king capturable. This also rejects adjacent kings.
+        let previous_side = side_to_move.opponent();
+        let previous_king = self.king(state, previous_side)?;
+        let previous_king_square = state.entity(previous_king)?.position;
+        if self.is_square_attacked(state, side_to_move, previous_king_square)? {
+            return Err(ChessError::InvalidFen(
+                "unsupported position: the side that just moved left its king in check".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub fn to_fen(&self, state: &GameState, history: &History) -> Result<String, ChessError> {
@@ -351,8 +425,16 @@ fn serialize_castling(rights: u8) -> String {
 }
 
 fn fen_en_passant_target(state: &GameState, history: &History) -> Option<Position> {
-    let previous = history.previous_turn()?;
-    if &previous.after != state {
+    let previous = history
+        .turns()
+        .iter()
+        .rev()
+        .find(|turn| turn.steps.iter().any(|step| step.action.kind == "chess_move"))?;
+    // Terminal chess actions (resignation, draw claim/agreement, imported PGN
+    // result) intentionally do not change the board or turn. They may add
+    // ruleset outcome metadata after the last real chess move, so compare only
+    // the position-bearing parts here instead of the complete GameState.
+    if previous.after.entities != state.entities || previous.after.turn != state.turn {
         return None;
     }
     for after in previous.after.entities.values().filter(|entity| entity.entity_type == PAWN) {
@@ -471,6 +553,48 @@ mod tests {
         assert!(rules
             .from_fen("4k3/8/8/3pP3/8/8/8/4K3 w - d3 0 17")
             .is_err());
+    }
+
+    #[test]
+    fn strict_fen_validation_rejects_impossible_standard_positions() {
+        let rules = ChessRules::standard();
+        assert!(rules
+            .from_fen("4k3/8/8/8/8/8/8/P3K3 w - - 0 1")
+            .is_err());
+        assert!(rules
+            .from_fen("4k3/pppppppp/8/8/8/8/PPPPPPPP/Q3KQQQ w - - 0 1")
+            .is_err());
+        assert!(rules
+            .from_fen("4k3/8/8/8/8/8/4R3/4K3 w - - 0 1")
+            .is_err());
+    }
+
+    #[test]
+    fn terminal_metadata_does_not_erase_fen_en_passant_target() {
+        use nydra_core::RecordedAction;
+
+        let rules = ChessRules::standard();
+        let imported = rules
+            .from_fen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 17")
+            .unwrap();
+        let mut timeline = imported.timeline;
+        let actor = timeline.current().turn.active_players[0];
+        let history = timeline.history().clone();
+        let mut turn = timeline.begin_turn(actor).unwrap();
+        turn.apply_transaction(
+            RecordedAction::new("chess_draw_agreement"),
+            |transaction| -> Result<(), ChessError> {
+                rules.agree_draw(transaction.raw_state_mut(), &history)?;
+                Ok(())
+            },
+        )
+        .unwrap();
+        timeline.commit_turn(turn).unwrap();
+
+        assert_eq!(
+            rules.to_fen(timeline.current(), timeline.history()).unwrap(),
+            "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 17"
+        );
     }
 
     #[test]

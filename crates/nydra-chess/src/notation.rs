@@ -3,8 +3,8 @@ use crate::{
     BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK, STANDARD_FEN, WHITE_PLAYER,
 };
 use nydra_core::{
-    ChoiceInput, EntityId, EntityTypeId, GameState, GameTimeline, History, Position, StateMap,
-    StateValue, TurnRecord, TurnSession,
+    ChoiceInput, EntityId, EntityTypeId, GameState, GameTimeline, History, Position, RecordedAction,
+    StateMap, StateValue, TurnRecord, TurnSession,
 };
 use std::collections::BTreeMap;
 
@@ -170,7 +170,8 @@ impl ChessRules {
         let imported = self.from_fen(&initial_fen)?;
         let mut timeline = imported.timeline;
 
-        for token in pgn_san_tokens(&movetext)? {
+        let (tokens, movetext_result) = pgn_san_tokens(&movetext)?;
+        for token in tokens {
             let history = timeline.history().clone();
             let state = timeline.current().clone();
             let (movement, promotion) = self.resolve_san(&state, &history, &token)?;
@@ -181,6 +182,24 @@ impl ChessRules {
             timeline.commit_turn(turn)?;
         }
 
+        let tag_result = tags.get("Result").map(String::as_str);
+        if tag_result.is_some_and(|token| !is_result_token(token)) {
+            return Err(ChessError::InvalidPgn("invalid Result tag".into()));
+        }
+        if let (Some(tag), Some(movetext)) = (tag_result, movetext_result.as_deref()) {
+            if tag != movetext {
+                return Err(ChessError::InvalidPgn(format!(
+                    "Result tag {tag:?} conflicts with movetext result {movetext:?}"
+                )));
+            }
+        }
+        let declared_result = movetext_result
+            .as_deref()
+            .or(tag_result)
+            .unwrap_or("*");
+        let result_was_explicit = movetext_result.is_some() || tag_result.is_some();
+        self.apply_declared_pgn_result(&mut timeline, declared_result, result_was_explicit)?;
+
         Ok(PgnGame {
             timeline,
             tags,
@@ -189,6 +208,15 @@ impl ChessRules {
     }
 
     pub fn to_pgn(&self, initial_fen: &str, history: &History) -> Result<String, ChessError> {
+        self.to_pgn_with_tags(initial_fen, history, &BTreeMap::new())
+    }
+
+    pub fn to_pgn_with_tags(
+        &self,
+        initial_fen: &str,
+        history: &History,
+        source_tags: &BTreeMap<String, String>,
+    ) -> Result<String, ChessError> {
         let initial = self.from_fen(initial_fen)?;
         let mut prefix = History::default();
         let mut moves = Vec::new();
@@ -200,32 +228,40 @@ impl ChessRules {
                 final_state = turn.after.clone();
                 continue;
             }
-            let san = self.san_for_turn(turn, &prefix)?;
-            let side = ChessSide::from_player(turn.actor).ok_or(ChessError::UnknownSide(turn.actor))?;
-            moves.push((self.fullmove_number(&turn.before), side, san));
+            if turn.steps.last().is_some_and(|step| step.action.kind == "chess_move") {
+                let san = self.san_for_turn(turn, &prefix)?;
+                let side = ChessSide::from_player(turn.actor).ok_or(ChessError::UnknownSide(turn.actor))?;
+                moves.push((self.fullmove_number(&turn.before), side, san));
+            }
             prefix = prefix.with_appended(turn.clone())?;
             final_state = turn.after.clone();
         }
 
         let result = result_token(self.status(&final_state, history)?.outcome.as_ref());
         let mut tags = vec![
-            ("Event", "Nydra local chess game".to_owned()),
-            ("Site", "?".to_owned()),
-            ("Date", "????.??.??".to_owned()),
-            ("Round", "-".to_owned()),
-            ("White", "White".to_owned()),
-            ("Black", "Black".to_owned()),
-            ("Result", result.to_owned()),
+            ("Event".to_owned(), source_tags.get("Event").cloned().unwrap_or_else(|| "Nydra local chess game".to_owned())),
+            ("Site".to_owned(), source_tags.get("Site").cloned().unwrap_or_else(|| "?".to_owned())),
+            ("Date".to_owned(), source_tags.get("Date").cloned().unwrap_or_else(|| "????.??.??".to_owned())),
+            ("Round".to_owned(), source_tags.get("Round").cloned().unwrap_or_else(|| "-".to_owned())),
+            ("White".to_owned(), source_tags.get("White").cloned().unwrap_or_else(|| "White".to_owned())),
+            ("Black".to_owned(), source_tags.get("Black").cloned().unwrap_or_else(|| "Black".to_owned())),
+            ("Result".to_owned(), result.to_owned()),
         ];
         if initial_fen != STANDARD_FEN {
-            tags.push(("SetUp", "1".to_owned()));
-            tags.push(("FEN", initial_fen.to_owned()));
+            tags.push(("SetUp".to_owned(), "1".to_owned()));
+            tags.push(("FEN".to_owned(), initial_fen.to_owned()));
+        }
+        for (name, value) in source_tags {
+            if matches!(name.as_str(), "Event" | "Site" | "Date" | "Round" | "White" | "Black" | "Result" | "SetUp" | "FEN") {
+                continue;
+            }
+            tags.push((name.clone(), value.clone()));
         }
 
         let mut output = String::new();
         for (name, value) in tags {
             output.push('[');
-            output.push_str(name);
+            output.push_str(&name);
             output.push_str(" \"");
             output.push_str(&escape_pgn_tag(&value));
             output.push_str("\"]\n");
@@ -261,6 +297,45 @@ impl ChessRules {
         output.push_str(result);
         output.push('\n');
         Ok(output)
+    }
+
+    fn apply_declared_pgn_result(
+        &self,
+        timeline: &mut GameTimeline,
+        declared: &str,
+        declared_was_explicit: bool,
+    ) -> Result<(), ChessError> {
+        let status = self.status(timeline.current(), timeline.history())?;
+        let natural = result_token(status.outcome.as_ref());
+        if natural != "*" {
+            if declared_was_explicit && declared != natural {
+                return Err(ChessError::InvalidPgn(format!(
+                    "declared result {declared:?} conflicts with board outcome {natural:?}"
+                )));
+            }
+            return Ok(());
+        }
+        if declared == "*" {
+            return Ok(());
+        }
+
+        let winner = match declared {
+            "1-0" => Some(WHITE_PLAYER),
+            "0-1" => Some(crate::BLACK_PLAYER),
+            "1/2-1/2" => None,
+            _ => return Err(ChessError::InvalidPgn("invalid game result".into())),
+        };
+        let actor = self.side_to_move(timeline.current())?.player();
+        let mut turn = timeline.begin_turn(actor)?;
+        turn.apply_transaction(
+            RecordedAction::new("chess_recorded_result"),
+            |transaction| -> Result<(), ChessError> {
+                self.record_result(transaction.raw_state_mut(), winner)?;
+                Ok(())
+            },
+        )?;
+        timeline.commit_turn(turn)?;
+        Ok(())
     }
 
     fn san_disambiguation(
@@ -336,7 +411,7 @@ impl ChessRules {
         }
     }
 
-    fn simulate_notated_turn(
+    pub(crate) fn simulate_notated_turn(
         &self,
         state: &GameState,
         history: &History,
@@ -424,7 +499,10 @@ fn square_name(position: Position) -> Result<String, ChessError> {
 
 fn normalize_san(value: &str) -> String {
     let mut value = value.trim().replace('0', "O");
-    while value.ends_with('!') || value.ends_with('?') {
+    if let Some(index) = value.find('$') {
+        value.truncate(index);
+    }
+    while matches!(value.chars().last(), Some('!' | '?' | '+' | '#')) {
         value.pop();
     }
     if value.ends_with("e.p.") {
@@ -437,7 +515,8 @@ fn normalize_san(value: &str) -> String {
 fn result_token(outcome: Option<&ChessOutcome>) -> &'static str {
     match outcome {
         Some(ChessOutcome::Checkmate { winner, .. })
-        | Some(ChessOutcome::Resignation { winner, .. }) => {
+        | Some(ChessOutcome::Resignation { winner, .. })
+        | Some(ChessOutcome::RecordedWin { winner, .. }) => {
             if *winner == WHITE_PLAYER {
                 "1-0"
             } else {
@@ -451,7 +530,8 @@ fn result_token(outcome: Option<&ChessOutcome>) -> &'static str {
             | ChessOutcome::FivefoldRepetition
             | ChessOutcome::FiftyMoveRule
             | ChessOutcome::SeventyFiveMoveRule
-            | ChessOutcome::DeadPosition,
+            | ChessOutcome::DeadPosition
+            | ChessOutcome::RecordedDraw,
         ) => "1/2-1/2",
         None => "*",
     }
@@ -512,20 +592,33 @@ fn parse_tag_line(line: &str) -> Result<(String, String), ChessError> {
     Ok((name.to_owned(), value))
 }
 
-fn pgn_san_tokens(movetext: &str) -> Result<Vec<String>, ChessError> {
+fn pgn_san_tokens(movetext: &str) -> Result<(Vec<String>, Option<String>), ChessError> {
     let stripped = strip_pgn_comments_and_variations(movetext)?;
-    let mut result = Vec::new();
+    let mut moves = Vec::new();
+    let mut result = None;
     for raw in stripped.split_whitespace() {
-        if raw.starts_with('$') || is_result_token(raw) {
+        if raw.starts_with('$') || raw.eq_ignore_ascii_case("e.p.") {
             continue;
         }
         let token = strip_move_number_prefix(raw);
-        if token.is_empty() || is_result_token(token) || token.starts_with('$') {
+        if token.is_empty() || token.starts_with('$') {
             continue;
         }
-        result.push(token.to_owned());
+        if is_result_token(token) {
+            if result.as_deref().is_some_and(|previous| previous != token) {
+                return Err(ChessError::InvalidPgn("conflicting movetext results".into()));
+            }
+            result = Some(token.to_owned());
+            continue;
+        }
+        if result.is_some() {
+            return Err(ChessError::InvalidPgn(
+                "SAN move appears after the game result".into(),
+            ));
+        }
+        moves.push(token.to_owned());
     }
-    Ok(result)
+    Ok((moves, result))
 }
 
 fn strip_move_number_prefix(mut token: &str) -> &str {
@@ -555,14 +648,18 @@ fn strip_pgn_comments_and_variations(input: &str) -> Result<String, ChessError> 
     let mut brace_depth = 0_u32;
     let mut variation_depth = 0_u32;
     let mut semicolon_comment = false;
+
     for ch in input.chars() {
         if semicolon_comment {
             if ch == '\n' {
                 semicolon_comment = false;
-                output.push(' ');
+                if variation_depth == 0 {
+                    output.push(' ');
+                }
             }
             continue;
         }
+
         if brace_depth > 0 {
             if ch == '{' {
                 brace_depth += 1;
@@ -571,33 +668,43 @@ fn strip_pgn_comments_and_variations(input: &str) -> Result<String, ChessError> 
             }
             continue;
         }
-        if ch == '{' {
-            if !output.chars().last().is_some_and(char::is_whitespace) {
-                output.push(' ');
-            }
-            brace_depth = 1;
-            continue;
-        }
-        if variation_depth > 0 {
-            if ch == '(' {
-                variation_depth += 1;
-            } else if ch == ')' {
-                variation_depth -= 1;
-            }
-            continue;
-        }
+
         match ch {
-            '(' => {
-                if !output.chars().last().is_some_and(char::is_whitespace) {
+            '{' => {
+                if variation_depth == 0
+                    && !output.chars().last().is_some_and(char::is_whitespace)
+                {
                     output.push(' ');
                 }
-                variation_depth = 1;
-            },
-            ')' => return Err(ChessError::InvalidPgn("unmatched variation close".into())),
-            ';' => semicolon_comment = true,
+                brace_depth = 1;
+            }
+            ';' => {
+                if variation_depth == 0
+                    && !output.chars().last().is_some_and(char::is_whitespace)
+                {
+                    output.push(' ');
+                }
+                semicolon_comment = true;
+            }
+            '(' => {
+                if variation_depth == 0
+                    && !output.chars().last().is_some_and(char::is_whitespace)
+                {
+                    output.push(' ');
+                }
+                variation_depth += 1;
+            }
+            ')' => {
+                if variation_depth == 0 {
+                    return Err(ChessError::InvalidPgn("unmatched variation close".into()));
+                }
+                variation_depth -= 1;
+            }
+            _ if variation_depth > 0 => {}
             _ => output.push(ch),
         }
     }
+
     if brace_depth != 0 || variation_depth != 0 {
         return Err(ChessError::InvalidPgn(
             "unterminated PGN comment or variation".into(),
@@ -811,7 +918,7 @@ mod tests {
         let rules = ChessRules::standard();
         let game = rules
             .from_pgn(
-                "[Event \"Example\"]\n\n1. e4 {main line} e5 2. Nf3 $1 Nc6 (2... Nf6) 3. Bb5 a6 *",
+                "[Event \"Example\"]\n\n1. e4 {main line} e5 2. Nf3 $1 Nc6 (2... Nf6 {sideline ) comment} 3. d4) 3. Bb5 a6 *",
             )
             .unwrap();
         assert_eq!(
@@ -832,4 +939,68 @@ mod tests {
         assert!(exported.contains("[FEN \"4k3/8/8/8/8/8/4P3/4K3 b - - 0 17\"]"));
         assert!(exported.contains("17... Kf7 *"));
     }
+    #[test]
+    fn pgn_result_is_preserved_when_board_does_not_encode_the_reason() {
+        let rules = ChessRules::standard();
+        let game = rules
+            .from_pgn("[Result \"0-1\"]\n\n1. e4 e5 2. Nf3 Nc6 0-1")
+            .unwrap();
+        assert_eq!(
+            rules.status(game.timeline.current(), game.timeline.history()).unwrap().outcome,
+            Some(ChessOutcome::RecordedWin {
+                winner: crate::BLACK_PLAYER,
+                loser: crate::WHITE_PLAYER,
+            })
+        );
+        let exported = rules.to_pgn(&game.initial_fen, game.timeline.history()).unwrap();
+        assert!(exported.contains("[Result \"0-1\"]"));
+        assert!(exported.trim_end().ends_with("0-1"));
+    }
+
+    #[test]
+    fn pgn_rejects_conflicting_declared_result() {
+        let rules = ChessRules::standard();
+        assert!(rules
+            .from_pgn("[Result \"1-0\"]\n\n1. e4 e5 0-1")
+            .is_err());
+    }
+
+    #[test]
+    fn pgn_rejects_explicit_unfinished_result_after_checkmate() {
+        let rules = ChessRules::standard();
+        assert!(rules
+            .from_pgn("[Result \"*\"]\n\n1. f3 e5 2. g4 Qh4# *")
+            .is_err());
+        assert!(rules.from_pgn("1. f3 e5 2. g4 Qh4#").is_ok());
+    }
+
+    #[test]
+    fn pgn_export_preserves_source_tags_but_recomputes_result() {
+        let rules = ChessRules::standard();
+        let game = rules
+            .from_pgn(
+                "[Event \"Club Championship\"]\n[Site \"Prague\"]\n[White \"Alpha\"]\n[Black \"Beta\"]\n[Annotator \"Nydra test\"]\n[Result \"0-1\"]\n\n1. e4 e5 0-1",
+            )
+            .unwrap();
+        let exported = rules
+            .to_pgn_with_tags(&game.initial_fen, game.timeline.history(), &game.tags)
+            .unwrap();
+        assert!(exported.contains("[Event \"Club Championship\"]"));
+        assert!(exported.contains("[Site \"Prague\"]"));
+        assert!(exported.contains("[White \"Alpha\"]"));
+        assert!(exported.contains("[Black \"Beta\"]"));
+        assert!(exported.contains("[Annotator \"Nydra test\"]"));
+        assert!(exported.contains("[Result \"0-1\"]"));
+    }
+
+    #[test]
+    fn san_parser_accepts_common_annotations_and_optional_check_suffix() {
+        let rules = ChessRules::standard();
+        let game = rules.from_pgn("1. f3 e5 2. g4 Qh4$1").unwrap();
+        assert!(matches!(
+            rules.status(game.timeline.current(), game.timeline.history()).unwrap().outcome,
+            Some(ChessOutcome::Checkmate { .. })
+        ));
+    }
+
 }
