@@ -2,7 +2,9 @@
 members = [
     "crates/nydra-core",
     "crates/nydra-chess",
-    "crates/nydra-examples",
+    "crates/nydra-checkers",
+    "crates/nydra-go",
+    "crates/nydra-rift",
     "crates/nydra-wasm",
 ]
 resolver = "2"
@@ -17,7 +19,9 @@ repository = "https://github.com/artegoser/nydra"
 [workspace.dependencies]
 nydra-core = { path = "crates/nydra-core" }
 nydra-chess = { path = "crates/nydra-chess" }
-nydra-examples = { path = "crates/nydra-examples" }
+nydra-checkers = { path = "crates/nydra-checkers" }
+nydra-go = { path = "crates/nydra-go" }
+nydra-rift = { path = "crates/nydra-rift" }
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 thiserror = "2.0"

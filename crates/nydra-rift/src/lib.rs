@@ -57,7 +57,9 @@ impl MageRule {
             };
             let position = Position::new(x, y);
             if state.board.contains(position) && state.entity_at(position)?.is_none() {
-                choices.push(ChoiceSpec::position(position));
+                let mut choice = ChoiceSpec::position(position);
+                choice.data.insert("actor", u64::from(entity.get()));
+                choices.push(choice);
             }
         }
         Ok(choices)
@@ -73,7 +75,7 @@ impl EntityRule for MageRule {
         let mut data = StateMap::new();
         data.insert("hp", entity_u64(entity, HP).unwrap_or(0));
         data.insert("mana", entity_u64(entity, MANA).unwrap_or(0));
-        Ok(EntityPresentation::new("rift/mage")
+        Ok(EntityPresentation::new(format!("rift/mage/{}", entity.owner.get()))
             .with_label(format!("Mage {}", entity.owner.get()))
             .with_data(data))
     }
@@ -413,6 +415,22 @@ impl Default for RiftInteractionRules {
 }
 
 impl RiftInteractionRules {
+    pub fn selected_entity(draft: &StateMap) -> Option<EntityId> {
+        draft_entity(draft, SELECTED)
+    }
+
+    pub fn pending_target(draft: &StateMap) -> Option<EntityId> {
+        draft_entity(draft, TARGET)
+    }
+
+    pub fn active_ability(draft: &StateMap) -> Option<AbilityId> {
+        draft_ability(draft)
+    }
+
+    pub fn has_moved(draft: &StateMap) -> bool {
+        draft.get(MOVED).and_then(StateValue::as_bool).unwrap_or(false)
+    }
+
     pub fn with_history(history: &History) -> Self {
         Self {
             registry: registry(),
@@ -487,13 +505,17 @@ impl InteractionRules for RiftInteractionRules {
     ) -> Result<Vec<ChoiceSpec>, InteractionError> {
         let player = active_player(&turn.working)?;
         let Some(actor) = draft_entity(draft, SELECTED) else {
-            return Ok(turn
+            let controlled = turn
                 .working
                 .entities
                 .values()
                 .filter(|entity| entity.controller == player && entity.entity_type == MAGE)
                 .map(|entity| ChoiceSpec::entity(entity.id))
-                .collect());
+                .collect::<Vec<_>>();
+            if controlled.is_empty() {
+                return Ok(vec![ChoiceSpec::finish_turn().with_label("Skip turn")]);
+            }
+            return Ok(controlled);
         };
 
         if !draft
@@ -807,13 +829,27 @@ mod tests {
     }
 
     #[test]
+    fn player_without_controlled_units_can_skip_instead_of_deadlocking() {
+        let mut state = standard_state();
+        state.entity_mut(MAGE_THREE).unwrap().controller = PLAYER_ONE;
+        state.set_active_players(vec![PLAYER_THREE]).unwrap();
+        let turn = TurnSession::new(&state, PLAYER_THREE).unwrap();
+        let mut driver = InteractionDriver::new(RiftInteractionRules::default(), turn).unwrap();
+        assert_eq!(driver.interaction().choices.len(), 1);
+        assert!(matches!(&driver.interaction().choices[0].kind, ChoiceKind::FinishTurn));
+        let skip = driver.interaction().choices[0].clone();
+        assert_eq!(driver.choose(skip.id).unwrap(), InteractionUpdate::Finished);
+        assert_eq!(driver.turn().working.turn.active_players, vec![PLAYER_ONE]);
+    }
+
+    #[test]
     fn entity_and_ability_rules_are_registered_without_mechanic_specific_core_types() {
         let state = standard_state();
         let registry = registry();
         let presentation = registry
             .presentation(RuleContext::from_state(&state, None), MAGE_ONE)
             .unwrap();
-        assert_eq!(presentation.asset_key, "rift/mage");
+        assert_eq!(presentation.asset_key, "rift/mage/1");
         assert_eq!(
             presentation.data.get("hp").and_then(StateValue::as_u64),
             Some(100)

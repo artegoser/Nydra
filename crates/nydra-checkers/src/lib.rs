@@ -268,6 +268,16 @@ fn actor_from_choice(choice: &Choice) -> Result<EntityId, InteractionError> {
 
 pub struct CheckersInteractionRules;
 
+impl CheckersInteractionRules {
+    pub fn selected_entity(draft: &StateMap) -> Option<EntityId> {
+        draft_entity(draft, SELECTED).or_else(|| draft_entity(draft, FORCED))
+    }
+
+    pub fn forced_entity(draft: &StateMap) -> Option<EntityId> {
+        draft_entity(draft, FORCED)
+    }
+}
+
 impl InteractionRules for CheckersInteractionRules {
     fn choices(
         &self,
@@ -313,10 +323,10 @@ impl InteractionRules for CheckersInteractionRules {
         draft: &mut StateMap,
         choice: &Choice,
     ) -> Result<InteractionFlow, InteractionError> {
-        match choice.kind {
+        match &choice.kind {
             ChoiceKind::SelectEntity { entity } => {
                 let player = active_player(&turn.working)?;
-                let piece = turn.working.entity(entity)?;
+                let piece = turn.working.entity(*entity)?;
                 if piece.controller != player || piece.entity_type != CHECKER {
                     return Err(InteractionError::RuleViolation(
                         "selected checker is not controlled by the active player".into(),
@@ -324,13 +334,13 @@ impl InteractionRules for CheckersInteractionRules {
                 }
                 if !legal_moves_for_player(&turn.working, player)?
                     .iter()
-                    .any(|movement| movement.actor == entity)
+                    .any(|movement| movement.actor == *entity)
                 {
                     return Err(InteractionError::RuleViolation(
                         "selected checker has no legal move".into(),
                     ));
                 }
-                set_draft_entity(draft, SELECTED, entity);
+                set_draft_entity(draft, SELECTED, *entity);
                 Ok(InteractionFlow::Continue)
             }
             ChoiceKind::SelectPosition { position } => {
@@ -361,7 +371,7 @@ impl InteractionRules for CheckersInteractionRules {
                 };
                 let movement = legal
                     .into_iter()
-                    .find(|movement| movement.to == position)
+                    .find(|movement| movement.to == *position)
                     .ok_or_else(|| {
                         InteractionError::RuleViolation("illegal checkers move".into())
                     })?;
@@ -374,7 +384,7 @@ impl InteractionRules for CheckersInteractionRules {
                             if let Some(capture) = movement.capture {
                                 transaction.remove_entity(capture)?;
                             }
-                            transaction.move_entity(actor, position)?;
+                            transaction.move_entity(actor, *position)?;
                             let promoted = CheckerRule::promote_if_needed(transaction.raw_state_mut(), actor)?;
                             if promoted {
                                 let mut data = StateMap::new();

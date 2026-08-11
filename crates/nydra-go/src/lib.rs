@@ -177,7 +177,7 @@ fn apply_placement(
     let own_group = group(state, stone)?;
     if !group_has_liberty(state, &own_group)? {
         return Err(InteractionError::RuleViolation(
-            "Go suicide is not legal in this example ruleset".into(),
+            "Go suicide is not legal in this reference ruleset".into(),
         ));
     }
     Ok(stone)
